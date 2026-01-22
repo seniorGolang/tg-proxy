@@ -1,0 +1,765 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TG Proxy API",
+    "description": "API для проксирования манифестов и файлов из GitLab репозиториев.\n\nAPI состоит из двух групп эндпоинтов:\n- Публичные эндпоинты: получение манифестов, файлов и списка версий\n- Админские эндпоинты: управление проектами (CRUD операции)\n",
+    "version": "1.0.0",
+    "contact": {
+      "name": "API Support"
+    }
+  },
+  "servers": [
+    {
+      "url": "/",
+      "description": "Основной сервер"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Public",
+      "description": "Публичные эндпоинты для получения манифестов и файлов"
+    },
+    {
+      "name": "Admin",
+      "description": "Админские эндпоинты для управления проектами"
+    }
+  ],
+  "paths": {
+    "/{alias}/{version}/manifest.yml": {
+      "get": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "Получить манифест проекта",
+        "description": "Возвращает YAML манифест для указанной версии проекта. Все URL в манифесте автоматически трансформируются на проксированные URL:\n- URL файлов загрузки (`packages[].downloads[].url`)\n- URL ссылок на манифесты (`manifests[].url`)\n- URL источников скриптов (`packages[].scripts.*.source`)\n- Зависимости (`packages[].dependencies[]`) с URL источниками автоматически заменяются на проксированные URL, если соответствующий проект зарегистрирован в системе",
+        "operationId": "getManifest",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "example": "myproject"
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "Версия проекта",
+            "schema": {
+              "type": "string"
+            },
+            "example": "1.0.25"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение манифеста",
+            "content": {
+              "application/x-yaml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Кэширование ответа",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=3600"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/{alias}/{version}/{filename}": {
+      "get": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "Получить файл проекта",
+        "description": "Возвращает файл из указанной версии проекта",
+        "operationId": "getFile",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "example": "myproject"
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "Версия проекта",
+            "schema": {
+              "type": "string"
+            },
+            "example": "1.0.25"
+          },
+          {
+            "name": "filename",
+            "in": "path",
+            "required": true,
+            "description": "Путь к файлу относительно корня проекта",
+            "schema": {
+              "type": "string"
+            },
+            "example": "bin/app"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение файла",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            },
+            "headers": {
+              "Content-Type": {
+                "description": "MIME тип файла",
+                "schema": {
+                  "type": "string",
+                  "example": "application/octet-stream"
+                }
+              },
+              "Content-Length": {
+                "description": "Размер файла в байтах",
+                "schema": {
+                  "type": "integer",
+                  "example": 1024
+                }
+              },
+              "Cache-Control": {
+                "description": "Кэширование ответа",
+                "schema": {
+                  "type": "string",
+                  "example": "public, max-age=3600"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/{alias}/versions": {
+      "get": {
+        "tags": [
+          "Public"
+        ],
+        "summary": "Получить список версий проекта",
+        "description": "Возвращает список доступных версий проекта, отсортированный по убыванию",
+        "operationId": "getVersions",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "example": "myproject"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение списка версий",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "example": [
+                    "2.0.0",
+                    "1.0.25",
+                    "1.0.24"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/projects": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Получить список проектов",
+        "description": "Возвращает список проектов с пагинацией",
+        "operationId": "listProjects",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Количество проектов на странице",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 10
+            },
+            "example": 10
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Смещение для пагинации",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "example": 0
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение списка проектов",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectsListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Создать проект",
+        "description": "Создает новый проект с указанными параметрами. URL репозитория автоматически нормализуется (удаляется суффикс `.git`, если присутствует) для обеспечения корректного поиска проектов при обработке зависимостей",
+        "operationId": "createProject",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectCreateRequest"
+              },
+              "example": {
+                "alias": "myproject",
+                "repo_url": "https://gitlab.com/group/project",
+                "token": "glpat-xxxxxxxxxxxxx",
+                "description": "Описание проекта",
+                "source_name": "gitlab"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Проект успешно создан"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/projects/{alias}": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Получить проект",
+        "description": "Возвращает информацию о проекте по алиасу",
+        "operationId": "getProject",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "example": "myproject"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение проекта",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Обновить проект",
+        "description": "Обновляет проект. Все поля опциональны - обновляются только указанные поля. URL репозитория автоматически нормализуется (удаляется суффикс `.git`, если присутствует) для обеспечения корректного поиска проектов при обработке зависимостей",
+        "operationId": "updateProject",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "example": "myproject"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectUpdateRequest"
+              },
+              "example": {
+                "repo_url": "https://gitlab.com/group/project-new",
+                "description": "Новое описание проекта"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Проект успешно обновлен"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Удалить проект",
+        "description": "Удаляет проект по алиасу",
+        "operationId": "deleteProject",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "example": "myproject"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Проект успешно удален"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalServerError"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BasicAuth": {
+        "type": "http",
+        "scheme": "basic",
+        "description": "Базовая HTTP аутентификация"
+      },
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "JWT токен в формате Bearer"
+      }
+    },
+    "schemas": {
+      "ProjectCreateRequest": {
+        "type": "object",
+        "required": [
+          "alias",
+          "repo_url"
+        ],
+        "properties": {
+          "alias": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "description": "Уникальный алиас проекта",
+            "example": "myproject"
+          },
+          "repo_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Полный URL репозитория",
+            "example": "https://gitlab.com/group/project"
+          },
+          "token": {
+            "type": "string",
+            "description": "Токен доступа к репозиторию (опционально)",
+            "example": "glpat-xxxxxxxxxxxxx"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Описание проекта (опционально)",
+            "example": "Описание проекта"
+          },
+          "source_name": {
+            "type": "string",
+            "description": "Имя источника (опционально)",
+            "example": "gitlab"
+          }
+        }
+      },
+      "ProjectUpdateRequest": {
+        "type": "object",
+        "description": "Все поля опциональны - обновляются только указанные поля",
+        "properties": {
+          "repo_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "Полный URL репозитория",
+            "example": "https://gitlab.com/group/project-new"
+          },
+          "token": {
+            "type": "string",
+            "description": "Токен доступа к репозиторию",
+            "example": "glpat-xxxxxxxxxxxxx"
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Описание проекта",
+            "example": "Новое описание проекта"
+          },
+          "source_name": {
+            "type": "string",
+            "description": "Имя источника",
+            "example": "gitlab"
+          }
+        }
+      },
+      "ProjectResponse": {
+        "type": "object",
+        "properties": {
+          "alias": {
+            "type": "string",
+            "description": "Алиас проекта",
+            "example": "myproject"
+          },
+          "repo_url": {
+            "type": "string",
+            "format": "uri",
+            "description": "URL репозитория",
+            "example": "https://gitlab.com/group/project"
+          },
+          "description": {
+            "type": "string",
+            "description": "Описание проекта",
+            "example": "Описание проекта"
+          },
+          "source_name": {
+            "type": "string",
+            "description": "Имя источника",
+            "example": "gitlab"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата создания проекта",
+            "example": "2024-01-15T10:30:00.000Z"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Дата последнего обновления проекта",
+            "example": "2024-01-20T14:45:00.000Z"
+          }
+        }
+      },
+      "ProjectsListResponse": {
+        "type": "object",
+        "properties": {
+          "projects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProjectResponse"
+            },
+            "description": "Список проектов"
+          },
+          "total": {
+            "type": "integer",
+            "description": "Общее количество проектов",
+            "example": 42
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Сообщение об ошибке",
+            "example": "Internal error"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Неверный запрос",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "validation failed: alias is required; repo_url must be a valid URL"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "Требуется аутентификация",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Unauthorized"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Ресурс не найден",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Project not found"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Конфликт (например, проект уже существует)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Project already exists"
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "Ошибка при обращении к внешнему сервису",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Failed to fetch file"
+            }
+          }
+        }
+      },
+      "InternalServerError": {
+        "description": "Внутренняя ошибка сервера",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "error": "Internal error"
+            }
+          }
+        }
+      }
+    }
+  }
+}
