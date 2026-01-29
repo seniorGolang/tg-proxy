@@ -9,8 +9,6 @@ import (
 	"github.com/lmittmann/tint"
 )
 
-// SetupLogger настраивает структурированный логгер с tint для цветного вывода
-// level - уровень логирования (slog.LevelDebug, slog.LevelInfo и т.д.)
 func SetupLogger(level slog.Level) {
 
 	logger := slog.New(tint.NewHandler(os.Stdout, &tint.Options{
@@ -20,9 +18,6 @@ func SetupLogger(level slog.Level) {
 	slog.SetDefault(logger)
 }
 
-// ParseLogLevel парсит уровень логирования из строки
-// Поддерживаемые значения: "debug", "info", "warn", "error"
-// По умолчанию возвращает slog.LevelInfo
 func ParseLogLevel(levelStr string) (level slog.Level) {
 
 	switch strings.ToLower(levelStr) {

@@ -5,14 +5,12 @@ import (
 	"crypto/sha256"
 )
 
-// DeriveKeyFromString генерирует ключ из строки (SHA-256)
 func DeriveKeyFromString(password string) (key []byte) {
 
 	hash := sha256.Sum256([]byte(password))
 	return hash[:]
 }
 
-// GenerateKey генерирует случайный ключ
 func GenerateKey() (key []byte, err error) {
 
 	key = make([]byte, 32)

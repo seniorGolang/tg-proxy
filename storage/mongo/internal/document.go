@@ -6,7 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
-// ProjectDocument представляет документ проекта в MongoDB
 type ProjectDocument struct {
 	ID             bson.ObjectID `bson:"_id,omitempty"`
 	Alias          string        `bson:"alias"`
@@ -18,11 +17,17 @@ type ProjectDocument struct {
 	UpdatedAt      time.Time     `bson:"updated_at"`
 }
 
-// ProjectUpdateDocument представляет документ для обновления проекта в MongoDB
 type ProjectUpdateDocument struct {
 	RepoURL        string    `bson:"repo_url"`
 	EncryptedToken string    `bson:"encrypted_token,omitempty"`
 	Description    string    `bson:"description,omitempty"`
 	SourceName     string    `bson:"source_name,omitempty"`
 	UpdatedAt      time.Time `bson:"updated_at"`
+}
+
+type CatalogVersionDocument struct {
+	ID    string `bson:"_id"`
+	Major int    `bson:"major"`
+	Minor int    `bson:"minor"`
+	Patch int    `bson:"patch"`
 }

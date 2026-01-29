@@ -2,7 +2,6 @@ package domain
 
 import "time"
 
-// Project представляет доменную модель проекта
 type Project struct {
 	Alias          string
 	RepoURL        string

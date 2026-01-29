@@ -1,15 +1,14 @@
 package helpers
 
 import (
+	"fmt"
 	"net/url"
 	"path"
 	"strings"
+
+	"github.com/seniorGolang/tg-proxy/errs"
 )
 
-// BuildURL строит URL из базового URL и частей пути
-// baseURL - базовый URL (например, https://api.github.com)
-// pathParts - части пути, которые будут объединены и экранированы
-// Возвращает полный URL или пустую строку в случае ошибки парсинга baseURL
 func BuildURL(baseURL string, pathParts ...string) (resultURL string) {
 
 	var parsedURL *url.URL
@@ -36,11 +35,6 @@ func BuildURL(baseURL string, pathParts ...string) (resultURL string) {
 	return
 }
 
-// BuildURLWithQuery строит URL из базового URL, частей пути и query параметров
-// baseURL - базовый URL (например, https://api.github.com)
-// queryParams - map с query параметрами (ключ - имя параметра, значение - значение параметра)
-// pathParts - части пути, которые будут объединены и экранированы
-// Возвращает полный URL или пустую строку в случае ошибки парсинга baseURL
 func BuildURLWithQuery(baseURL string, queryParams map[string]string, pathParts ...string) (resultURL string) {
 
 	var parsedURL *url.URL
@@ -75,7 +69,6 @@ func BuildURLWithQuery(baseURL string, queryParams map[string]string, pathParts 
 	return
 }
 
-// NormalizeRepoURL нормализует URL репозитория, удаляя суффикс .git если он присутствует
 func NormalizeRepoURL(repoURL string) (normalized string) {
 
 	if repoURL == "" {
@@ -84,4 +77,29 @@ func NormalizeRepoURL(repoURL string) (normalized string) {
 
 	normalized = strings.TrimSuffix(repoURL, ".git")
 	return
+}
+
+// ValidateRepoURLMatchesSource проверяет, что repoURL имеет ту же схему и хост, что и sourceBaseURL.
+// Возвращает errs.ErrRepoURLSourceMismatch при несовпадении или ошибке разбора URL.
+func ValidateRepoURLMatchesSource(repoURL string, sourceBaseURL string) (err error) {
+
+	repoParsed, err := url.Parse(repoURL)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errs.ErrRepoURLSourceMismatch, err)
+	}
+	sourceParsed, err := url.Parse(sourceBaseURL)
+	if err != nil {
+		return fmt.Errorf("%w: %v", errs.ErrRepoURLSourceMismatch, err)
+	}
+
+	repoScheme := strings.ToLower(repoParsed.Scheme)
+	repoHost := strings.ToLower(repoParsed.Host)
+	sourceScheme := strings.ToLower(sourceParsed.Scheme)
+	sourceHost := strings.ToLower(sourceParsed.Host)
+
+	if repoScheme != sourceScheme || repoHost != sourceHost {
+		return errs.ErrRepoURLSourceMismatch
+	}
+
+	return nil
 }

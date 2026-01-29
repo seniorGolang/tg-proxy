@@ -6,11 +6,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
-// GetIndexModels возвращает все необходимые индексы для коллекции projects
-// Уникальный индекс на поле alias (используется в GetProject, UpdateProject, DeleteProject, Exists, GetProjectToken)
-// Индекс для сортировки по created_at (используется в ListProjects с ORDER BY created_at DESC)
-// Индекс для поиска по source_name (может использоваться для фильтрации проектов по источнику)
-// Индекс для поиска по repo_url (может использоваться для поиска проектов по URL репозитория)
 func GetIndexModels() (indexModels []mongo.IndexModel) {
 
 	indexModels = []mongo.IndexModel{

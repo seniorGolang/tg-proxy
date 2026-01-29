@@ -2,9 +2,20 @@ package github
 
 import (
 	"net/http"
+	"net/url"
+	"strings"
 )
 
-const sourceName = "github"
+const (
+	versionPrefix        = "v"
+	sourceName           = "github"
+	baseURL              = "https://github.com"
+	apiBaseURL           = "https://api.github.com"
+	releasesURL          = "https://github.com/%s/%s/releases/download/%s"
+	gitInfoRefs          = "https://github.com/%s/%s.git/info/refs"
+	gitService           = "?service=git-upload-pack"
+	releasesDownloadPath = "/releases/download/"
+)
 
 type Source struct {
 	baseURL string
@@ -12,39 +23,60 @@ type Source struct {
 	http    *http.Client
 }
 
-// ClientOption - функция опции для настройки GitHub клиента
-type ClientOption func(*Source)
-
-// DefaultToken устанавливает fallback токен доступа
-// Этот токен используется только если токен проекта не задан
-// В норме токен задан для каждого проекта через project.Token
-func DefaultToken(token string) (opt ClientOption) {
-	return func(s *Source) {
-		s.token = token
-	}
+func (s *Source) Info() (name, url string) {
+	return sourceName, baseURL
 }
 
-// NewClient создает новый GitHub клиент с использованием паттерна опций
-// baseURL - базовый URL GitHub (например, https://api.github.com)
-// opts - опции для настройки клиента (например, DefaultToken для fallback токена)
-func NewClient(baseURL string, opts ...ClientOption) (src *Source) {
+func NewClient(opts ...ClientOption) (src *Source) {
 
-	s := &Source{
+	src = &Source{
 		baseURL: baseURL,
 		http:    &http.Client{},
 	}
 
 	for _, opt := range opts {
-		opt(s)
+		opt(src)
 	}
 
-	return s
+	return
 }
 
-func (s *Source) Name() (name string) {
-	return sourceName
-}
+func (s *Source) ParseFileURL(fileURL string) (version string, filename string, ok bool) {
 
-func (s *Source) BaseURL() (url string) {
-	return s.baseURL
+	parsed, err := url.Parse(fileURL)
+	if err != nil || parsed.Host == "" {
+		return
+	}
+
+	baseParsed, err := url.Parse(s.baseURL)
+	if err != nil || baseParsed.Host == "" {
+		return
+	}
+
+	if parsed.Scheme != baseParsed.Scheme || parsed.Host != baseParsed.Host {
+		return
+	}
+
+	idx := strings.Index(parsed.Path, releasesDownloadPath)
+	if idx == -1 {
+		return
+	}
+
+	after := strings.Trim(parsed.Path[idx+len(releasesDownloadPath):], "/")
+	if after == "" {
+		return
+	}
+
+	parts := strings.Split(after, "/")
+	if len(parts) < 2 {
+		return
+	}
+
+	version = parts[0]
+	filename = parts[len(parts)-1]
+	if version == "" || filename == "" {
+		return
+	}
+
+	return version, filename, true
 }

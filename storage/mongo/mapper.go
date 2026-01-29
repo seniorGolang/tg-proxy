@@ -5,7 +5,6 @@ import (
 	"github.com/seniorGolang/tg-proxy/storage/mongo/internal"
 )
 
-// toDocument преобразует доменную модель в документ MongoDB
 func toDocument(project domain.Project) (doc internal.ProjectDocument) {
 	return internal.ProjectDocument{
 		Alias:          project.Alias,
@@ -18,7 +17,6 @@ func toDocument(project domain.Project) (doc internal.ProjectDocument) {
 	}
 }
 
-// toDomain преобразует документ MongoDB в доменную модель
 func toDomain(doc internal.ProjectDocument) (project domain.Project) {
 	return domain.Project{
 		Alias:          doc.Alias,
@@ -31,7 +29,6 @@ func toDomain(doc internal.ProjectDocument) (project domain.Project) {
 	}
 }
 
-// toUpdateDocument преобразует доменную модель в документ для обновления MongoDB
 func toUpdateDocument(project domain.Project) (doc internal.ProjectUpdateDocument) {
 	return internal.ProjectUpdateDocument{
 		RepoURL:        project.RepoURL,

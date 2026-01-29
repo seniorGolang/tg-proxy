@@ -2,7 +2,6 @@ package model
 
 import "github.com/seniorGolang/tg-proxy/model/domain"
 
-// ToDomain преобразует model.Manifest в domain.Manifest
 func (m *Manifest) ToDomain() (manifest domain.Manifest) {
 	manifest.Version = m.Version
 	manifest.Manifests = make([]domain.ManifestRef, len(m.Manifests))
@@ -18,7 +17,6 @@ func (m *Manifest) ToDomain() (manifest domain.Manifest) {
 	return
 }
 
-// FromDomain преобразует domain.Manifest в model.Manifest
 func (m *Manifest) FromDomain(manifest domain.Manifest) {
 	m.Version = manifest.Version
 	m.Manifests = make([]ManifestRef, len(manifest.Manifests))
@@ -33,7 +31,6 @@ func (m *Manifest) FromDomain(manifest domain.Manifest) {
 	}
 }
 
-// ToDomain преобразует model.Package в domain.Package
 func (p *Package) ToDomain() (pkg domain.Package) {
 	pkg.Name = p.Name
 	pkg.Descr = p.Descr
@@ -62,7 +59,6 @@ func (p *Package) ToDomain() (pkg domain.Package) {
 	return
 }
 
-// FromDomain преобразует domain.Package в model.Package
 func (p *Package) FromDomain(pkg domain.Package) {
 	p.Name = pkg.Name
 	p.Descr = pkg.Descr
@@ -91,7 +87,6 @@ func (p *Package) FromDomain(pkg domain.Package) {
 	copy(p.Dependencies, pkg.Dependencies)
 }
 
-// ToDomain преобразует model.Scripts в domain.Scripts
 func (s *Scripts) ToDomain() (scripts *domain.Scripts) {
 	scripts = &domain.Scripts{}
 	if s.PreInstall != nil {
@@ -125,7 +120,6 @@ func (s *Scripts) ToDomain() (scripts *domain.Scripts) {
 	return
 }
 
-// FromDomain преобразует domain.Scripts в model.Scripts
 func (s *Scripts) FromDomain(scripts *domain.Scripts) {
 	if scripts == nil {
 		return

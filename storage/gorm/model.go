@@ -9,7 +9,6 @@ import (
 	"github.com/seniorGolang/tg-proxy/storage/gorm/generated"
 )
 
-// Project представляет модель проекта в базе данных
 type Project struct {
 	Alias          string    `gorm:"primaryKey;column:alias"`
 	RepoURL        string    `gorm:"column:repo_url;not null;index:idx_projects_repo_url"`
@@ -20,12 +19,10 @@ type Project struct {
 	UpdatedAt      time.Time `gorm:"column:updated_at;not null"`
 }
 
-// TableName возвращает имя таблицы для модели Project
 func (Project) TableName() string {
 	return TableProjects
 }
 
-// ToDomain преобразует модель в доменную модель
 func (p Project) ToDomain() (project domain.Project) {
 	return domain.Project{
 		Alias:          p.Alias,
@@ -38,7 +35,6 @@ func (p Project) ToDomain() (project domain.Project) {
 	}
 }
 
-// FromDomain создает модель из доменной модели
 func FromDomain(project domain.Project) (p Project) {
 	return Project{
 		Alias:          project.Alias,
@@ -51,7 +47,6 @@ func FromDomain(project domain.Project) (p Project) {
 	}
 }
 
-// BeforeCreate хук перед созданием записи
 func (p *Project) BeforeCreate(tx *gorm.DB) (err error) {
 	now := time.Now()
 	if p.CreatedAt.IsZero() {
@@ -63,22 +58,28 @@ func (p *Project) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-// BeforeUpdate хук перед обновлением записи
 func (p *Project) BeforeUpdate(tx *gorm.DB) (err error) {
 	p.UpdatedAt = time.Now()
 	return
 }
 
-// GetOmitFields возвращает имена колонок полей, которые нужно исключить при обновлении
-// Использует сгенерированные GORM CLI field helpers для получения имен колонок
-// Включает первичный ключ и поля с автогенерацией
 func GetOmitFields() (fields []string) {
 
-	// Используем Column() метод из сгенерированных field helpers для получения имен колонок
 	fields = []string{
-		generated.Project.Alias.Column().Name,     // Первичный ключ
-		generated.Project.CreatedAt.Column().Name, // Поле с автогенерацией
+		generated.Project.Alias.Column().Name,
+		generated.Project.CreatedAt.Column().Name,
 	}
 
 	return
+}
+
+type CatalogVersion struct {
+	ID    int `gorm:"primaryKey;column:id"`
+	Major int `gorm:"column:major;not null"`
+	Minor int `gorm:"column:minor;not null"`
+	Patch int `gorm:"column:patch;not null"`
+}
+
+func (CatalogVersion) TableName() string {
+	return TableCatalogVersion
 }

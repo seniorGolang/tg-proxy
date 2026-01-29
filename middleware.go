@@ -9,7 +9,6 @@ import (
 	"github.com/seniorGolang/tg-proxy/helpers"
 )
 
-// publicAuthMiddleware обертка для проверки авторизации публичных роутов в net/http
 func (p *Proxy) publicAuthMiddleware(next http.HandlerFunc) (handler http.HandlerFunc) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +29,6 @@ func (p *Proxy) publicAuthMiddleware(next http.HandlerFunc) (handler http.Handle
 	}
 }
 
-// adminAuthMiddleware обертка для проверки авторизации админских роутов в net/http
 func (p *Proxy) adminAuthMiddleware(next http.HandlerFunc) (handler http.HandlerFunc) {
 
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +49,6 @@ func (p *Proxy) adminAuthMiddleware(next http.HandlerFunc) (handler http.Handler
 	}
 }
 
-// publicFiberAuthMiddleware обертка для проверки авторизации публичных роутов в Fiber
 func (p *Proxy) publicFiberAuthMiddleware(c *fiber.Ctx) (err error) {
 
 	if p.publicAuth != nil {
@@ -100,7 +97,6 @@ func (p *Proxy) publicFiberAuthMiddleware(c *fiber.Ctx) (err error) {
 	return c.Next()
 }
 
-// adminFiberAuthMiddleware обертка для проверки авторизации админских роутов в Fiber
 func (p *Proxy) adminFiberAuthMiddleware(c *fiber.Ctx) (err error) {
 
 	if p.adminAuth != nil {

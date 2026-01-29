@@ -9,11 +9,16 @@ import (
 	"sync"
 	"time"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/seniorGolang/tg-proxy/errs"
 	"github.com/seniorGolang/tg-proxy/helpers"
 	"github.com/seniorGolang/tg-proxy/model"
 	"github.com/seniorGolang/tg-proxy/model/domain"
 )
+
+const listProjectsBatchSize = 500
+const aggregateManifestTTL = 5 * time.Minute
 
 type engine struct {
 	storage     storage
@@ -25,32 +30,26 @@ type engine struct {
 	transformer *transformer
 }
 
-// EngineOption - функция опции для настройки Engine
 type EngineOption func(*engine)
 
-// Storage устанавливает хранилище проектов
 func Storage(stor storage) (opt EngineOption) {
 	return func(e *engine) {
 		e.storage = stor
 	}
 }
 
-// Encryptor устанавливает шифратор для токенов
 func Encryptor(enc encryptor) (opt EngineOption) {
 	return func(e *engine) {
 		e.encryptor = enc
 	}
 }
 
-// Cache устанавливает кеш
 func Cache(c cache) (opt EngineOption) {
 	return func(e *engine) {
 		e.cache = c
 	}
 }
 
-// NewEngine создает новый Engine с использованием паттерна опций
-// opts - опции для настройки Engine (Storage, Encryptor, Cache)
 func NewEngine(opts ...EngineOption) (eng *engine) {
 
 	e := &engine{
@@ -72,28 +71,21 @@ func (e *engine) RegisterSource(src Source) (err error) {
 	e.sourcesMu.Lock()
 	defer e.sourcesMu.Unlock()
 
-	name := src.Name()
+	source, sourceUrl := src.Info()
 
-	if _, exists := e.sources[name]; exists {
+	if _, exists := e.sources[source]; exists {
 		slog.Debug("Source already registered",
-			slog.String(helpers.LogKeySource, name),
+			slog.String(helpers.LogKeySource, source),
+			slog.String(helpers.LogKeySourceURL, sourceUrl),
 		)
-		return fmt.Errorf("%w: %s", errs.ErrSourceAlreadyRegistered, name)
+		return fmt.Errorf("%w: %s", errs.ErrSourceAlreadyRegistered, source)
 	}
 
-	e.sources[name] = src
+	e.sources[source] = src
 
-	args := []any{
-		slog.String(helpers.LogKeySource, name),
-	}
-
-	if sourceInfo, ok := src.(SourceInfo); ok {
-		if baseURL := sourceInfo.BaseURL(); baseURL != "" {
-			args = append(args, slog.String(helpers.LogKeySourceURL, baseURL))
-		}
-	}
-
-	slog.Info("Source registered", args...)
+	slog.Info("Source registered",
+		slog.String(helpers.LogKeySource, source),
+		slog.String(helpers.LogKeySourceURL, sourceUrl))
 
 	return
 }
@@ -188,8 +180,7 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 
 	var domainManifest domain.Manifest
 	if domainManifest, err = src.GetManifest(ctx, project, version); err != nil {
-		// Если GitLab/GitHub API вернул 404, это означает, что манифест не найден
-		// Преобразуем в ErrVersionNotFound, так как версия уже была проверена в списке версий
+		// 404 от API → ErrVersionNotFound (версия уже проверена в списке версий)
 		if statusCode, found := helpers.ExtractStatusCode(err); found && statusCode == 404 {
 			slog.Debug("Manifest not found (404), treating as version not found",
 				slog.String(helpers.LogKeyAction, helpers.ActionGetManifest),
@@ -213,7 +204,6 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 	var modelManifest model.Manifest
 	modelManifest.FromDomain(domainManifest)
 
-	// Извлекаем домен источника из RepoURL для проверки принадлежности URL
 	var sourceDomain string
 	if sourceDomain, err = ExtractSourceDomain(project.RepoURL); err != nil {
 		slog.Debug("Failed to extract source domain, continuing without domain check",
@@ -226,7 +216,7 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 		sourceDomain = ""
 	}
 
-	if manifest, err = e.transformer.Transform(ctx, &modelManifest, alias, version, baseURL, sourceDomain); err != nil {
+	if manifest, err = e.transformer.Transform(ctx, &modelManifest, alias, version, baseURL, sourceDomain, src); err != nil {
 		slog.Debug("Failed to transform manifest",
 			slog.String(helpers.LogKeyAction, helpers.ActionGetManifest),
 			slog.String(helpers.LogKeyAlias, alias),
@@ -237,6 +227,90 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 	}
 
 	return
+}
+
+func (e *engine) GetAggregateManifest(ctx context.Context, baseURL string) (manifest []byte, err error) {
+
+	if e.cache != nil {
+		var found bool
+		if manifest, found, err = e.cache.GetAggregateManifest(ctx); err != nil {
+			slog.Debug("Failed to get aggregate manifest from cache",
+				slog.String(helpers.LogKeyAction, helpers.ActionGetAggregateManifest),
+				slog.Any(helpers.LogKeyError, err),
+			)
+			manifest = nil
+		} else if found {
+			return
+		}
+	}
+
+	var version string
+	if version, err = e.storage.GetCatalogVersion(ctx); err != nil {
+		slog.Debug("Failed to get catalog version",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetAggregateManifest),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		return
+	}
+
+	projects, err := e.listAllProjectsForAggregate(ctx)
+	if err != nil {
+		slog.Debug("Failed to list projects for aggregate manifest",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetAggregateManifest),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		return
+	}
+
+	refs := make([]model.ManifestRef, 0, len(projects))
+	for i := range projects {
+		projectURL := helpers.BuildURL(baseURL, projects[i].Alias)
+		if projectURL == "" {
+			continue
+		}
+		refs = append(refs, model.ManifestRef{URL: projectURL})
+	}
+
+	agg := model.Manifest{
+		Version:   version,
+		Manifests: refs,
+	}
+
+	if manifest, err = yaml.Marshal(&agg); err != nil {
+		slog.Debug("Failed to marshal aggregate manifest",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetAggregateManifest),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		return
+	}
+
+	if e.cache != nil {
+		_ = e.cache.SetAggregateManifest(ctx, manifest, aggregateManifestTTL)
+	}
+
+	return
+}
+
+func (e *engine) listAllProjectsForAggregate(ctx context.Context) (projects []domain.Project, err error) {
+
+	var total int64
+	for offset := 0; ; offset += listProjectsBatchSize {
+		var batch []domain.Project
+		if batch, total, err = e.storage.ListProjects(ctx, listProjectsBatchSize, offset); err != nil {
+			return
+		}
+		projects = append(projects, batch...)
+		if int64(len(projects)) >= total || len(batch) == 0 {
+			break
+		}
+	}
+
+	return
+}
+
+func (e *engine) GetCatalogVersion(ctx context.Context) (version string, err error) {
+
+	return e.storage.GetCatalogVersion(ctx)
 }
 
 func (e *engine) GetFile(ctx context.Context, alias string, version string, filename string) (stream io.ReadCloser, err error) {
@@ -308,8 +382,7 @@ func (e *engine) GetFile(ctx context.Context, alias string, version string, file
 	}
 
 	if stream, err = src.GetFileStream(ctx, project, version, filename); err != nil {
-		// Если GitLab/GitHub API вернул 404, это означает, что файл не найден
-		// Преобразуем в ErrVersionNotFound, так как версия уже была проверена в списке версий
+		// 404 от API → ErrVersionNotFound (версия уже проверена в списке версий)
 		if statusCode, found := helpers.ExtractStatusCode(err); found && statusCode == 404 {
 			slog.Debug("File not found (404), treating as version not found",
 				slog.String(helpers.LogKeyAction, helpers.ActionGetFile),
@@ -386,8 +459,7 @@ func (e *engine) GetVersions(ctx context.Context, alias string) (versions []stri
 	}
 
 	if versions, err = src.GetVersions(ctx, project); err != nil {
-		// Если GitLab/GitHub API вернул 404, это означает, что пакеты не найдены
-		// В этом случае возвращаем пустой список версий вместо ошибки
+		// 404 от API → пустой список версий (вместо ошибки)
 		if statusCode, found := helpers.ExtractStatusCode(err); found && statusCode == 404 {
 			slog.Debug("No packages found (404), returning empty versions list",
 				slog.String(helpers.LogKeyAction, helpers.ActionGetVersions),

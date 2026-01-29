@@ -6,11 +6,21 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/seniorGolang/tg-proxy/errs"
 	"github.com/seniorGolang/tg-proxy/helpers"
 	"github.com/seniorGolang/tg-proxy/model/domain"
 )
+
+func ensureVersionPrefix(version string) (tag string) {
+
+	tag = version
+	if tag != "" && !strings.HasPrefix(tag, versionPrefix) {
+		tag = versionPrefix + tag
+	}
+	return tag
+}
 
 func (s *Source) GetFileStream(ctx context.Context, project domain.Project, version string, filename string) (stream io.ReadCloser, err error) {
 
@@ -25,12 +35,17 @@ func (s *Source) GetFileStream(ctx context.Context, project domain.Project, vers
 
 func (s *Source) GetFileResponse(ctx context.Context, project domain.Project, version string, filename string) (resp *http.Response, err error) {
 
-	// Пытаемся получить файл из релиза (assets)
-	// Если не найдено, пытаемся получить из содержимого репозитория
-	apiURL := s.buildContentsURL(project.RepoURL, version, filename)
+	owner, repo := s.extractOwnerRepo(project.RepoURL)
+	if owner == "" || repo == "" {
+		err = fmt.Errorf("%w: invalid repo URL", errs.ErrGitHubAPI)
+		return
+	}
+
+	tag := ensureVersionPrefix(version)
+	directURL := fmt.Sprintf(releasesURL+"/%s", owner, repo, tag, filename)
 
 	var req *http.Request
-	if req, err = http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil); err != nil {
+	if req, err = http.NewRequestWithContext(ctx, http.MethodGet, directURL, nil); err != nil {
 		return
 	}
 
@@ -43,25 +58,24 @@ func (s *Source) GetFileResponse(ctx context.Context, project domain.Project, ve
 	if token != "" {
 		req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 	}
-	req.Header.Set("Accept", "application/vnd.github.v3.raw")
+	req.Header.Set("Accept", "application/octet-stream")
 
 	if resp, err = s.http.Do(req); err != nil {
 		return
 	}
 
-	if resp.StatusCode != http.StatusOK {
-		_ = resp.Body.Close()
-		// Если файл не найден в содержимом, пытаемся найти в assets релиза
-		return s.getFileFromRelease(ctx, project, version, filename)
+	if resp.StatusCode == http.StatusOK {
+		return
 	}
 
-	return
+	_ = resp.Body.Close()
+	return s.getFileFromRelease(ctx, project, version, filename)
 }
 
 func (s *Source) getFileFromRelease(ctx context.Context, project domain.Project, version string, filename string) (resp *http.Response, err error) {
 
 	owner, repo := s.extractOwnerRepo(project.RepoURL)
-	apiURL := helpers.BuildURL(s.baseURL, "repos", owner, repo, "releases", "tags", version)
+	apiURL := helpers.BuildURL(apiBaseURL, "repos", owner, repo, "releases", "tags", version)
 
 	var req *http.Request
 	if req, err = http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil); err != nil {
@@ -101,7 +115,6 @@ func (s *Source) getFileFromRelease(ctx context.Context, project domain.Project,
 		return
 	}
 
-	// Ищем файл в assets
 	var assetURL string
 	for _, asset := range release.Assets {
 		if asset.Name == filename {
@@ -115,7 +128,6 @@ func (s *Source) getFileFromRelease(ctx context.Context, project domain.Project,
 		return
 	}
 
-	// Загружаем файл из asset
 	if req, err = http.NewRequestWithContext(ctx, http.MethodGet, assetURL, nil); err != nil {
 		return
 	}

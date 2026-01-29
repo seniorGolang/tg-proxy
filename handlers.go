@@ -36,6 +36,28 @@ func (p *Proxy) handleGetManifest(ctx context.Context, alias string, version str
 	return
 }
 
+func (p *Proxy) handleGetAggregateManifest(ctx context.Context) (manifest []byte, statusCode int, err error) {
+
+	if manifest, err = p.engine.GetAggregateManifest(ctx, p.baseURL); err != nil {
+		statusCode = http.StatusInternalServerError
+		return
+	}
+
+	statusCode = http.StatusOK
+	return
+}
+
+func (p *Proxy) handleGetCatalogVersion(ctx context.Context) (version string, statusCode int, err error) {
+
+	if version, err = p.engine.GetCatalogVersion(ctx); err != nil {
+		statusCode = http.StatusInternalServerError
+		return
+	}
+
+	statusCode = http.StatusOK
+	return
+}
+
 func (p *Proxy) handleGetFile(ctx context.Context, alias string, version string, filename string) (stream io.ReadCloser, statusCode int, err error) {
 
 	if stream, err = p.engine.GetFile(ctx, alias, version, filename); err != nil {
@@ -77,6 +99,21 @@ func (p *Proxy) handleGetVersions(ctx context.Context, alias string) (versions [
 func (p *Proxy) handleCreateProject(ctx context.Context, req dto.ProjectCreateRequest) (statusCode int, err error) {
 
 	project := req.ToDomain()
+
+	src, err := p.engine.GetSource(project.SourceName)
+	if err != nil {
+		if errors.Is(err, errs.ErrSourceNotFound) {
+			return http.StatusBadRequest, err
+		}
+		return http.StatusInternalServerError, err
+	}
+	_, sourceURL := src.Info()
+	if err = helpers.ValidateRepoURLMatchesSource(project.RepoURL, sourceURL); err != nil {
+		if errors.Is(err, errs.ErrRepoURLSourceMismatch) {
+			return http.StatusBadRequest, err
+		}
+		return http.StatusInternalServerError, err
+	}
 
 	if err = p.engine.CreateProject(ctx, project); err != nil {
 		if errors.Is(err, errs.ErrProjectAlreadyExists) {
@@ -138,6 +175,15 @@ func (p *Proxy) handleUpdateProject(ctx context.Context, alias string, req dto.P
 
 	updateProject := req.ToDomain(alias)
 
+	if req.SourceName != nil {
+		if _, err = p.engine.GetSource(*req.SourceName); err != nil {
+			if errors.Is(err, errs.ErrSourceNotFound) {
+				return http.StatusBadRequest, err
+			}
+			return http.StatusInternalServerError, err
+		}
+	}
+
 	if req.RepoURL != nil {
 		currentProject.RepoURL = updateProject.RepoURL
 	}
@@ -149,6 +195,21 @@ func (p *Proxy) handleUpdateProject(ctx context.Context, alias string, req dto.P
 	}
 	if req.SourceName != nil {
 		currentProject.SourceName = updateProject.SourceName
+	}
+
+	src, err := p.engine.GetSource(currentProject.SourceName)
+	if err != nil {
+		if errors.Is(err, errs.ErrSourceNotFound) {
+			return http.StatusBadRequest, err
+		}
+		return http.StatusInternalServerError, err
+	}
+	_, sourceURL := src.Info()
+	if err = helpers.ValidateRepoURLMatchesSource(currentProject.RepoURL, sourceURL); err != nil {
+		if errors.Is(err, errs.ErrRepoURLSourceMismatch) {
+			return http.StatusBadRequest, err
+		}
+		return http.StatusInternalServerError, err
 	}
 
 	if err = p.engine.UpdateProject(ctx, alias, currentProject); err != nil {

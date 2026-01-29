@@ -1,9 +1,8 @@
 package mongo
 
 const (
-	// CollectionProjects имя коллекции для хранения проектов
-	CollectionProjects = "projects"
-
-	// FieldEncryptedToken имя поля зашифрованного токена в документе
-	FieldEncryptedToken = "encrypted_token"
+	CollectionProjects       = "projects"
+	CollectionCatalogVersion = "catalog_version"
+	DocIDCatalogVersion      = "version"
+	FieldEncryptedToken      = "encrypted_token"
 )

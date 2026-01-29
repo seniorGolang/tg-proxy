@@ -1,18 +1,15 @@
 package domain
 
-// Manifest описывает конкретную версию релиза с пакетами и/или ссылками на другие манифесты.
 type Manifest struct {
 	Version   string
 	Packages  []Package
 	Manifests []ManifestRef
 }
 
-// ManifestRef представляет ссылку на другой манифест.
 type ManifestRef struct {
 	URL string
 }
 
-// Package описывает пакет из релиза.
 type Package struct {
 	Name         string
 	Descr        string
@@ -22,14 +19,12 @@ type Package struct {
 	Dependencies []string
 }
 
-// PlatformDownload содержит информацию о загрузке.
 type PlatformDownload struct {
 	OS   string
 	Arch string
 	URL  string
 }
 
-// FileInstallation описывает установку файла.
 type FileInstallation struct {
 	File        string
 	Source      string
@@ -37,7 +32,6 @@ type FileInstallation struct {
 	Checksum    string
 }
 
-// Scripts содержит скрипты для выполнения.
 type Scripts struct {
 	PreInstall    *ScriptAction
 	PostInstall   *ScriptAction
@@ -45,7 +39,6 @@ type Scripts struct {
 	PostUninstall *ScriptAction
 }
 
-// ScriptAction описывает действие скрипта.
 type ScriptAction struct {
 	Script string
 	Source string

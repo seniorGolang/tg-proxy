@@ -1,6 +1,7 @@
 package gorm
 
 const (
-	// TableProjects имя таблицы для хранения проектов
-	TableProjects = "projects"
+	TableProjects       = "projects"
+	TableCatalogVersion = "catalog_version"
+	CatalogVersionID    = 1
 )

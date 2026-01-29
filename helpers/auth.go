@@ -17,8 +17,6 @@ const (
 	defaultAPIKeyHeader = "X-Tg-Proxy-Key" //nolint:gosec
 )
 
-// StaticKeyAuth реализация авторизации через статический ключ (API Key)
-// Поддерживает оба фреймворка (net/http и go-fiber)
 type StaticKeyAuth struct {
 	key    string
 	header string
@@ -66,13 +64,10 @@ func (a *StaticKeyAuth) AuthorizeFiber(c *fiber.Ctx) (err error) {
 	return
 }
 
-// NewStaticKeyAuth создает новый StaticKeyAuth
 func NewStaticKeyAuth(key string, headerName string) (auth *StaticKeyAuth) {
 	return &StaticKeyAuth{key: key, header: headerName}
 }
 
-// BasicAuth реализация авторизации через HTTP Basic Authentication
-// Поддерживает оба фреймворка (net/http и go-fiber)
 type BasicAuth struct {
 	username string
 	password string
@@ -122,13 +117,10 @@ func (a *BasicAuth) AuthorizeFiber(c *fiber.Ctx) (err error) {
 	return
 }
 
-// NewBasicAuth создает новый BasicAuth
 func NewBasicAuth(username string, password string) (auth *BasicAuth) {
 	return &BasicAuth{username: username, password: password}
 }
 
-// JWTAuth реализация авторизации через JWT с асинхронной подписью (RSA)
-// Поддерживает оба фреймворка (net/http и go-fiber)
 type JWTAuth struct {
 	publicKey *rsa.PublicKey
 }
@@ -193,7 +185,6 @@ func (a *JWTAuth) AuthorizeFiber(c *fiber.Ctx) (err error) {
 	return
 }
 
-// NewJWTAuth создает новый JWTAuth из PEM-encoded публичного ключа
 func NewJWTAuth(publicKeyPEM string) (auth *JWTAuth, err error) {
 
 	var publicKey *rsa.PublicKey

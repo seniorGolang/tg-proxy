@@ -13,4 +13,5 @@ type storage interface {
 	UpdateProject(ctx context.Context, alias string, project domain.Project) (err error)
 	DeleteProject(ctx context.Context, alias string) (err error)
 	ListProjects(ctx context.Context, limit int, offset int) (projects []domain.Project, total int64, err error)
+	GetCatalogVersion(ctx context.Context) (version string, err error)
 }

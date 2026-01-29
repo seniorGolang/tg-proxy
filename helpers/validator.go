@@ -15,8 +15,6 @@ func init() {
 	validate = validator.New()
 }
 
-// ValidateStruct валидирует структуру с использованием тегов validate
-// Возвращает ошибку валидации с понятным сообщением или nil, если валидация прошла успешно
 func ValidateStruct(s any) (err error) {
 
 	if err = validate.Struct(s); err != nil {
@@ -47,9 +45,6 @@ func ValidateStruct(s any) (err error) {
 	return
 }
 
-// ValidateAlias валидирует алиас проекта
-// alias - алиас для валидации
-// Возвращает ошибку валидации или nil, если алиас валиден
 func ValidateAlias(alias string) (err error) {
 
 	if alias == "" {

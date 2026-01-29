@@ -23,7 +23,7 @@ func (s *Source) GetManifest(ctx context.Context, project domain.Project, versio
 
 	slog.Debug("GitLab API request",
 		slog.String(helpers.LogKeyAction, helpers.ActionGetManifest),
-		slog.String(helpers.LogKeySource, s.Name()),
+		slog.String(helpers.LogKeySource, sourceName),
 		slog.String(helpers.LogKeyRequestURL, apiURL),
 		slog.String(helpers.LogKeyRepoURL, project.RepoURL),
 		slog.String(helpers.LogKeyVersion, version),
@@ -53,7 +53,7 @@ func (s *Source) GetManifest(ctx context.Context, project domain.Project, versio
 	if resp.StatusCode != http.StatusOK {
 		slog.Debug("GitLab API error response",
 			slog.String(helpers.LogKeyAction, helpers.ActionGetManifest),
-			slog.String(helpers.LogKeySource, s.Name()),
+			slog.String(helpers.LogKeySource, sourceName),
 			slog.String(helpers.LogKeyRequestURL, apiURL),
 			slog.Int(helpers.LogKeyStatusCode, resp.StatusCode),
 			slog.String(helpers.LogKeyRepoURL, project.RepoURL),
@@ -91,7 +91,7 @@ func (s *Source) extractProjectPath(repoURL string) (path string) {
 	var parsedURL *url.URL
 	if parsedURL, err = url.Parse(repoURL); err != nil {
 		slog.Debug("Failed to parse repo URL",
-			slog.String(helpers.LogKeySource, s.Name()),
+			slog.String(helpers.LogKeySource, sourceName),
 			slog.String(helpers.LogKeyRepoURL, repoURL),
 			slog.Any(helpers.LogKeyError, err),
 		)
@@ -99,11 +99,10 @@ func (s *Source) extractProjectPath(repoURL string) (path string) {
 	}
 
 	path = strings.TrimPrefix(parsedURL.Path, "/")
-	// Убираем .git суффикс, если есть
 	path = strings.TrimSuffix(path, ".git")
 
 	slog.Debug("Extracted project path",
-		slog.String(helpers.LogKeySource, s.Name()),
+		slog.String(helpers.LogKeySource, sourceName),
 		slog.String(helpers.LogKeyRepoURL, repoURL),
 		slog.String("project_path", path),
 	)

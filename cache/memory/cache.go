@@ -14,13 +14,18 @@ type cacheEntry struct {
 	versions []string
 }
 
-type Cache struct {
-	mu       sync.RWMutex
-	projects map[string]*cacheEntry
-	versions map[string]*cacheEntry
+type aggregateEntry struct {
+	manifest []byte
+	expires  time.Time
 }
 
-// NewCache создает новый Memory Cache
+type Cache struct {
+	mu        sync.RWMutex
+	projects  map[string]*cacheEntry
+	versions  map[string]*cacheEntry
+	aggregate *aggregateEntry
+}
+
 func NewCache() (c *Cache) {
 	return &Cache{
 		projects: make(map[string]*cacheEntry),
@@ -103,6 +108,41 @@ func (c *Cache) SetVersions(ctx context.Context, alias string, versions []string
 	return
 }
 
+func (c *Cache) GetAggregateManifest(ctx context.Context) (manifest []byte, found bool, err error) {
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	if c.aggregate == nil {
+		return
+	}
+
+	if time.Now().After(c.aggregate.expires) {
+		return
+	}
+
+	manifest = make([]byte, len(c.aggregate.manifest))
+	copy(manifest, c.aggregate.manifest)
+	found = true
+
+	return
+}
+
+func (c *Cache) SetAggregateManifest(ctx context.Context, manifest []byte, ttl time.Duration) (err error) {
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	data := make([]byte, len(manifest))
+	copy(data, manifest)
+	c.aggregate = &aggregateEntry{
+		manifest: data,
+		expires:  time.Now().Add(ttl),
+	}
+
+	return
+}
+
 func (c *Cache) Clear(ctx context.Context) (err error) {
 
 	c.mu.Lock()
@@ -110,6 +150,7 @@ func (c *Cache) Clear(ctx context.Context) (err error) {
 
 	c.projects = make(map[string]*cacheEntry)
 	c.versions = make(map[string]*cacheEntry)
+	c.aggregate = nil
 
 	return
 }

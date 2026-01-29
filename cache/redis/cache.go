@@ -14,15 +14,15 @@ import (
 )
 
 const (
-	projectKeyPrefix  = "project:"
-	versionsKeyPrefix = "versions:"
+	projectKeyPrefix     = "project:"
+	versionsKeyPrefix    = "versions:"
+	aggregateManifestKey = "aggregate_manifest"
 )
 
 type Cache struct {
 	client *redis.Client
 }
 
-// NewCache создает новый Redis Cache
 func NewCache(client *redis.Client) (c *Cache) {
 	return &Cache{
 		client: client,
@@ -125,6 +125,33 @@ func (c *Cache) SetVersions(ctx context.Context, alias string, versions []string
 	return
 }
 
+func (c *Cache) GetAggregateManifest(ctx context.Context) (manifest []byte, found bool, err error) {
+
+	var data string
+	if data, err = c.client.Get(ctx, aggregateManifestKey).Result(); err != nil {
+		if errors.Is(err, redis.Nil) {
+			err = nil
+			return
+		}
+		err = fmt.Errorf("failed to get aggregate manifest from cache: %w", err)
+		return
+	}
+
+	manifest = []byte(data)
+	found = true
+	return
+}
+
+func (c *Cache) SetAggregateManifest(ctx context.Context, manifest []byte, ttl time.Duration) (err error) {
+
+	if err = c.client.Set(ctx, aggregateManifestKey, manifest, ttl).Err(); err != nil {
+		err = fmt.Errorf("failed to set aggregate manifest in cache: %w", err)
+		return
+	}
+
+	return
+}
+
 func (c *Cache) Clear(ctx context.Context) (err error) {
 
 	var keys []string
@@ -148,6 +175,8 @@ func (c *Cache) Clear(ctx context.Context) (err error) {
 		err = fmt.Errorf("failed to scan version keys: %w", err)
 		return
 	}
+
+	keys = append(keys, aggregateManifestKey)
 
 	if len(keys) > 0 {
 		if err = c.client.Del(ctx, keys...).Err(); err != nil {

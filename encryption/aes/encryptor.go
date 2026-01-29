@@ -20,7 +20,6 @@ type Encryptor struct {
 	block cipher.Block
 }
 
-// NewEncryptor создает новый AES-GCM Encryptor
 func NewEncryptor(key []byte) (enc *Encryptor, err error) {
 
 	if len(key) != keySize {

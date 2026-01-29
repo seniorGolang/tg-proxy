@@ -29,7 +29,7 @@ func (s *Source) GetFileResponse(ctx context.Context, project domain.Project, ve
 
 	slog.Debug("GitLab API request",
 		slog.String(helpers.LogKeyAction, helpers.ActionGetFile),
-		slog.String(helpers.LogKeySource, s.Name()),
+		slog.String(helpers.LogKeySource, sourceName),
 		slog.String(helpers.LogKeyRequestURL, apiURL),
 		slog.String(helpers.LogKeyRepoURL, project.RepoURL),
 		slog.String(helpers.LogKeyVersion, version),
@@ -58,7 +58,7 @@ func (s *Source) GetFileResponse(ctx context.Context, project domain.Project, ve
 	if resp.StatusCode != http.StatusOK {
 		slog.Debug("GitLab API error response",
 			slog.String(helpers.LogKeyAction, helpers.ActionGetFile),
-			slog.String(helpers.LogKeySource, s.Name()),
+			slog.String(helpers.LogKeySource, sourceName),
 			slog.String(helpers.LogKeyRequestURL, apiURL),
 			slog.Int(helpers.LogKeyStatusCode, resp.StatusCode),
 			slog.String(helpers.LogKeyRepoURL, project.RepoURL),

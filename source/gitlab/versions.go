@@ -28,7 +28,7 @@ func (s *Source) GetVersions(ctx context.Context, project domain.Project) (versi
 
 	slog.Debug("GitLab API request",
 		slog.String(helpers.LogKeyAction, helpers.ActionGetVersions),
-		slog.String(helpers.LogKeySource, s.Name()),
+		slog.String(helpers.LogKeySource, sourceName),
 		slog.String(helpers.LogKeyRequestURL, apiURL),
 		slog.String(helpers.LogKeyRepoURL, project.RepoURL),
 		slog.String("project_path", projectPath),
@@ -58,7 +58,7 @@ func (s *Source) GetVersions(ctx context.Context, project domain.Project) (versi
 	if resp.StatusCode != http.StatusOK {
 		slog.Debug("GitLab API error response",
 			slog.String(helpers.LogKeyAction, helpers.ActionGetVersions),
-			slog.String(helpers.LogKeySource, s.Name()),
+			slog.String(helpers.LogKeySource, sourceName),
 			slog.String(helpers.LogKeyRequestURL, apiURL),
 			slog.Int(helpers.LogKeyStatusCode, resp.StatusCode),
 			slog.String(helpers.LogKeyRepoURL, project.RepoURL),
@@ -91,8 +91,7 @@ func (s *Source) buildAPIURLWithQuery(queryParams map[string]string, pathParts .
 		return ""
 	}
 
-	// Собираем путь вручную, избегая path.Join для закодированных сегментов
-	// projectPath должен быть закодирован один раз с помощью url.PathEscape
+	// Path и RawPath раздельно, чтобы избежать двойного кодирования при сборке URL.
 	pathSegments := make([]string, 0, len(pathParts)+1)
 	rawPathSegments := make([]string, 0, len(pathParts)+1)
 	basePath := strings.TrimSuffix(parsedBaseURL.Path, "/")
@@ -103,15 +102,12 @@ func (s *Source) buildAPIURLWithQuery(queryParams map[string]string, pathParts .
 
 	for _, part := range pathParts {
 		if part != "" {
-			// Кодируем каждый сегмент для RawPath
 			escapedPart := url.PathEscape(part)
 			rawPathSegments = append(rawPathSegments, escapedPart)
-			// Для Path используем оригинальный сегмент (но собираем вручную, избегая path.Join)
 			pathSegments = append(pathSegments, part)
 		}
 	}
 
-	// Собираем пути
 	newPath := strings.Join(pathSegments, "/")
 	rawPath := strings.Join(rawPathSegments, "/")
 	if !strings.HasPrefix(newPath, "/") {
@@ -119,9 +115,6 @@ func (s *Source) buildAPIURLWithQuery(queryParams map[string]string, pathParts .
 		rawPath = "/" + rawPath
 	}
 
-	// Устанавливаем Path и RawPath
-	// Path содержит декодированный путь (для правильной работы String())
-	// RawPath содержит закодированный путь (для избежания двойного кодирования)
 	parsedBaseURL.Path = newPath
 	parsedBaseURL.RawPath = rawPath
 
@@ -133,10 +126,7 @@ func (s *Source) buildAPIURLWithQuery(queryParams map[string]string, pathParts .
 		parsedBaseURL.RawQuery = query.Encode()
 	}
 
-	// Используем EscapedPath() для получения правильного закодированного пути
-	// Если RawPath установлен и отличается от Path, используем его
 	if parsedBaseURL.RawPath != "" && parsedBaseURL.RawPath != parsedBaseURL.Path {
-		// Собираем URL вручную с использованием RawPath
 		apiURL = parsedBaseURL.Scheme + "://" + parsedBaseURL.Host + parsedBaseURL.RawPath
 		if parsedBaseURL.RawQuery != "" {
 			apiURL += "?" + parsedBaseURL.RawQuery
@@ -158,8 +148,7 @@ func (s *Source) buildAPIURL(pathParts ...string) (apiURL string) {
 		return ""
 	}
 
-	// Собираем путь вручную, избегая path.Join для закодированных сегментов
-	// projectPath должен быть закодирован один раз с помощью url.PathEscape
+	// Path и RawPath раздельно, чтобы избежать двойного кодирования при сборке URL.
 	pathSegments := make([]string, 0, len(pathParts)+1)
 	rawPathSegments := make([]string, 0, len(pathParts)+1)
 	basePath := strings.TrimSuffix(parsedBaseURL.Path, "/")
@@ -170,15 +159,12 @@ func (s *Source) buildAPIURL(pathParts ...string) (apiURL string) {
 
 	for _, part := range pathParts {
 		if part != "" {
-			// Кодируем каждый сегмент для RawPath
 			escapedPart := url.PathEscape(part)
 			rawPathSegments = append(rawPathSegments, escapedPart)
-			// Для Path используем оригинальный сегмент (но собираем вручную, избегая path.Join)
 			pathSegments = append(pathSegments, part)
 		}
 	}
 
-	// Собираем пути
 	newPath := strings.Join(pathSegments, "/")
 	rawPath := strings.Join(rawPathSegments, "/")
 	if !strings.HasPrefix(newPath, "/") {
@@ -186,16 +172,10 @@ func (s *Source) buildAPIURL(pathParts ...string) (apiURL string) {
 		rawPath = "/" + rawPath
 	}
 
-	// Устанавливаем Path и RawPath
-	// Path содержит декодированный путь (для правильной работы String())
-	// RawPath содержит закодированный путь (для избежания двойного кодирования)
 	parsedBaseURL.Path = newPath
 	parsedBaseURL.RawPath = rawPath
 
-	// Используем EscapedPath() для получения правильного закодированного пути
-	// Если RawPath установлен и отличается от Path, используем его
 	if parsedBaseURL.RawPath != "" && parsedBaseURL.RawPath != parsedBaseURL.Path {
-		// Собираем URL вручную с использованием RawPath
 		apiURL = parsedBaseURL.Scheme + "://" + parsedBaseURL.Host + parsedBaseURL.RawPath
 		if parsedBaseURL.RawQuery != "" {
 			apiURL += "?" + parsedBaseURL.RawQuery
@@ -216,7 +196,7 @@ func (s *Source) ValidateProject(ctx context.Context, project domain.Project) (e
 
 	slog.Debug("GitLab API request",
 		slog.String(helpers.LogKeyAction, "validate_project"),
-		slog.String(helpers.LogKeySource, s.Name()),
+		slog.String(helpers.LogKeySource, sourceName),
 		slog.String(helpers.LogKeyRequestURL, apiURL),
 		slog.String(helpers.LogKeyRepoURL, project.RepoURL),
 		slog.String("project_path", projectPath),
@@ -246,7 +226,7 @@ func (s *Source) ValidateProject(ctx context.Context, project domain.Project) (e
 	if resp.StatusCode != http.StatusOK {
 		slog.Debug("GitLab API error response",
 			slog.String(helpers.LogKeyAction, "validate_project"),
-			slog.String(helpers.LogKeySource, s.Name()),
+			slog.String(helpers.LogKeySource, sourceName),
 			slog.String(helpers.LogKeyRequestURL, apiURL),
 			slog.Int(helpers.LogKeyStatusCode, resp.StatusCode),
 			slog.String(helpers.LogKeyRepoURL, project.RepoURL),
