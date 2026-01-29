@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "TG Proxy API",
-    "description": "API для проксирования манифестов и файлов из GitLab репозиториев.\n\nAPI состоит из двух групп эндпоинтов:\n- Публичные эндпоинты: получение манифестов, файлов и списка версий\n- Админские эндпоинты: управление проектами (CRUD операции)\n",
+    "description": "API для проксирования манифестов и файлов из GitLab и GitHub репозиториев.\n\nAPI состоит из двух групп эндпоинтов:\n- Публичные эндпоинты: агрегированный манифест, версия каталога, манифесты и файлы проектов, списки версий\n- Админские эндпоинты: управление проектами (CRUD), списки версий проекта, манифест проекта (JSON, с опцией агрегации)\n",
     "version": "1.0.0",
     "contact": {
       "name": "API Support"
@@ -25,6 +25,123 @@
     }
   ],
   "paths": {
+    "/": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Получить агрегированный манифест",
+        "description": "Возвращает YAML агрегированного манифеста каталога (все проекты). URL в манифесте трансформируются в проксированные.",
+        "operationId": "getAggregateManifest",
+        "responses": {
+          "200": {
+            "description": "Успешное получение манифеста",
+            "content": {
+              "application/x-yaml": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Кэширование ответа",
+                "schema": { "type": "string", "example": "public, max-age=3600" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        },
+        "security": [{ "BasicAuth": [] }, { "BearerAuth": [] }]
+      }
+    },
+    "/manifest.yml": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Получить агрегированный манифест (manifest.yml)",
+        "description": "То же, что GET /. Возвращает YAML агрегированного манифеста каталога.",
+        "operationId": "getAggregateManifestAlt",
+        "responses": {
+          "200": {
+            "description": "Успешное получение манифеста",
+            "content": {
+              "application/x-yaml": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Кэширование ответа",
+                "schema": { "type": "string", "example": "public, max-age=3600" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        },
+        "security": [{ "BasicAuth": [] }, { "BearerAuth": [] }]
+      }
+    },
+    "/versions": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Получить версию каталога",
+        "description": "Возвращает текущую версию каталога в виде JSON-массива из одной строки, например [\"1.0.0\"].",
+        "operationId": "getCatalogVersion",
+        "responses": {
+          "200": {
+            "description": "Успешное получение версии каталога",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "example": ["1.0.0"]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        },
+        "security": [{ "BasicAuth": [] }, { "BearerAuth": [] }]
+      }
+    },
+    "/{version}/manifest.yml": {
+      "get": {
+        "tags": ["Public"],
+        "summary": "Получить агрегированный манифест для версии каталога",
+        "description": "Возвращает YAML агрегированного манифеста только если запрошенная версия совпадает с текущей версией каталога. Иначе 404.",
+        "operationId": "getAggregateManifestAtVersion",
+        "parameters": [
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "Версия каталога",
+            "schema": { "type": "string" },
+            "example": "1.0.0"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение манифеста",
+            "content": {
+              "application/x-yaml": {
+                "schema": { "type": "string", "format": "binary" }
+              }
+            },
+            "headers": {
+              "Cache-Control": {
+                "description": "Кэширование ответа",
+                "schema": { "type": "string", "example": "public, max-age=3600" }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        },
+        "security": [{ "BasicAuth": [] }, { "BearerAuth": [] }]
+      }
+    },
     "/{alias}/{version}/manifest.yml": {
       "get": {
         "tags": [
@@ -344,7 +461,22 @@
         },
         "responses": {
           "201": {
-            "description": "Проект успешно создан"
+            "description": "Проект успешно создан",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["id"],
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid",
+                      "description": "UUID созданного проекта"
+                    }
+                  }
+                }
+              }
+            }
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
@@ -532,6 +664,94 @@
           }
         ]
       }
+    },
+    "/projects/{alias}/versions": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Получить список версий проекта (админ)",
+        "description": "Возвращает список доступных версий проекта по алиасу. Эквивалент публичного GET /{alias}/versions с админской аутентификацией.",
+        "operationId": "listProjectVersions",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "example": "myproject"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение списка версий",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "type": "string" },
+                  "example": ["2.0.0", "1.0.25", "1.0.24"]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        },
+        "security": [{ "BasicAuth": [] }, { "BearerAuth": [] }]
+      }
+    },
+    "/projects/{alias}/versions/{version}/manifest": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Получить манифест проекта (JSON)",
+        "description": "Возвращает манифест проекта в JSON. С query-параметром aggregate=true — агрегированный вид (пакеты с source_alias, source_version). Без aggregate — структура Manifest (version, manifests, packages).",
+        "operationId": "getManifestAdmin",
+        "parameters": [
+          {
+            "name": "alias",
+            "in": "path",
+            "required": true,
+            "description": "Алиас проекта",
+            "schema": { "type": "string", "minLength": 1, "maxLength": 255 },
+            "example": "myproject"
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "description": "Версия проекта",
+            "schema": { "type": "string" },
+            "example": "1.0.25"
+          },
+          {
+            "name": "aggregate",
+            "in": "query",
+            "required": false,
+            "description": "Если true, возвращается агрегированный манифест (ManifestAggregatedResponse)",
+            "schema": { "type": "boolean", "default": false }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Успешное получение манифеста (Manifest или ManifestAggregatedResponse)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/Manifest" },
+                    { "$ref": "#/components/schemas/ManifestAggregatedResponse" }
+                  ]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "500": { "$ref": "#/components/responses/InternalServerError" }
+        },
+        "security": [{ "BasicAuth": [] }, { "BearerAuth": [] }]
+      }
     }
   },
   "components": {
@@ -553,7 +773,8 @@
         "type": "object",
         "required": [
           "alias",
-          "repo_url"
+          "repo_url",
+          "source_name"
         ],
         "properties": {
           "alias": {
@@ -618,6 +839,12 @@
       "ProjectResponse": {
         "type": "object",
         "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "UUID проекта",
+            "example": "550e8400-e29b-41d4-a716-446655440000"
+          },
           "alias": {
             "type": "string",
             "description": "Алиас проекта",
@@ -677,6 +904,106 @@
             "type": "string",
             "description": "Сообщение об ошибке",
             "example": "Internal error"
+          }
+        }
+      },
+      "Manifest": {
+        "type": "object",
+        "description": "Структура манифеста проекта (JSON)",
+        "properties": {
+          "version": { "type": "string", "description": "Версия манифеста" },
+          "manifests": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ManifestRef" }
+          },
+          "packages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Package" }
+          }
+        }
+      },
+      "ManifestRef": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "description": "URL манифеста" }
+        }
+      },
+      "Package": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "descr": { "type": "string" },
+          "downloads": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PlatformDownload" }
+          },
+          "files": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/FileInstallation" }
+          },
+          "scripts": { "$ref": "#/components/schemas/Scripts" },
+          "dependencies": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "PlatformDownload": {
+        "type": "object",
+        "properties": {
+          "os": { "type": "string" },
+          "arch": { "type": "string" },
+          "url": { "type": "string" }
+        }
+      },
+      "FileInstallation": {
+        "type": "object",
+        "properties": {
+          "file": { "type": "string" },
+          "source": { "type": "string" },
+          "destination": { "type": "string" },
+          "checksum": { "type": "string" }
+        }
+      },
+      "Scripts": {
+        "type": "object",
+        "properties": {
+          "pre_install": { "$ref": "#/components/schemas/ScriptAction" },
+          "post_install": { "$ref": "#/components/schemas/ScriptAction" },
+          "pre_uninstall": { "$ref": "#/components/schemas/ScriptAction" },
+          "post_uninstall": { "$ref": "#/components/schemas/ScriptAction" }
+        }
+      },
+      "ScriptAction": {
+        "type": "object",
+        "properties": {
+          "script": { "type": "string" },
+          "source": { "type": "string" },
+          "exec": { "type": "string" }
+        }
+      },
+      "PackageWithSource": {
+        "type": "object",
+        "description": "Пакет с указанием источника (агрегированный манифест)",
+        "allOf": [
+          { "$ref": "#/components/schemas/Package" },
+          {
+            "type": "object",
+            "properties": {
+              "source_alias": { "type": "string" },
+              "source_version": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "ManifestAggregatedResponse": {
+        "type": "object",
+        "description": "Ответ GET .../manifest?aggregate=true",
+        "properties": {
+          "version": { "type": "string" },
+          "packages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PackageWithSource" }
           }
         }
       }

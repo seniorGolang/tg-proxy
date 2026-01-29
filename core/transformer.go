@@ -79,7 +79,7 @@ func isSameDomain(urlStr string, sourceDomain string) (same bool) {
 
 func (t *transformer) Transform(ctx context.Context, manifest *model.Manifest, alias string, version string, baseURL string, sourceDomain string, resolver Source) (transformed []byte, err error) {
 
-	if err = t.replaceManifestURLs(ctx, manifest, alias, version, baseURL, sourceDomain, resolver); err != nil {
+	if err = t.ReplaceManifestURLs(ctx, manifest, alias, version, baseURL, sourceDomain, resolver); err != nil {
 		return
 	}
 
@@ -90,6 +90,12 @@ func (t *transformer) Transform(ctx context.Context, manifest *model.Manifest, a
 	}
 
 	return
+}
+
+// ReplaceManifestURLs заменяет URL в манифесте на прокси (модифицирует manifest на месте).
+func (t *transformer) ReplaceManifestURLs(ctx context.Context, manifest *model.Manifest, alias string, version string, baseURL string, sourceDomain string, resolver Source) (err error) {
+
+	return t.replaceManifestURLs(ctx, manifest, alias, version, baseURL, sourceDomain, resolver)
 }
 
 func (t *transformer) replaceManifestURLs(ctx context.Context, manifest *model.Manifest, alias string, version string, baseURL string, sourceDomain string, resolver Source) (err error) {
@@ -289,15 +295,10 @@ func (t *transformer) replaceURL(originalURL string, alias string, version strin
 		return
 	}
 
-	var newURL *url.URL
-	if newURL, err = url.Parse(baseURL); err != nil {
-		replaced = originalURL
-		return
+	replaced = helpers.BuildURL(baseURL, alias, version, filename)
+	if parsedURL.RawQuery != "" {
+		replaced = replaced + "?" + parsedURL.RawQuery
 	}
-
-	newURL.Path = path.Join("/", alias, version, filename)
-	newURL.RawQuery = parsedURL.RawQuery
-	replaced = newURL.String()
 
 	return
 }

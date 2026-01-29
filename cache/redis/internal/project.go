@@ -3,11 +3,13 @@ package internal
 import (
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/seniorGolang/tg-proxy/model/domain"
 )
 
-// Project представляет документ проекта в Redis
 type Project struct {
+	ID             uuid.UUID `json:"id"`
 	Alias          string    `json:"alias"`
 	RepoURL        string    `json:"repo_url"`
 	EncryptedToken string    `json:"encrypted_token"`
@@ -18,10 +20,10 @@ type Project struct {
 	UpdatedAt      time.Time `json:"updated_at"`
 }
 
-// ToDomain преобразует документ в доменную модель
 func (d Project) ToDomain() (project domain.Project) {
 
 	return domain.Project{
+		ID:             d.ID,
 		Alias:          d.Alias,
 		RepoURL:        d.RepoURL,
 		EncryptedToken: d.EncryptedToken,
@@ -33,10 +35,10 @@ func (d Project) ToDomain() (project domain.Project) {
 	}
 }
 
-// FromDomain создает документ из доменной модели
 func FromDomain(project domain.Project) (doc Project) {
 
 	return Project{
+		ID:             project.ID,
 		Alias:          project.Alias,
 		RepoURL:        project.RepoURL,
 		EncryptedToken: project.EncryptedToken,

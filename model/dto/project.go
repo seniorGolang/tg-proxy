@@ -3,6 +3,8 @@ package dto
 import (
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/seniorGolang/tg-proxy/model/domain"
 )
 
@@ -22,6 +24,7 @@ type ProjectUpdateRequest struct {
 }
 
 type ProjectResponse struct {
+	ID          uuid.UUID `json:"id"`
 	Alias       string    `json:"alias"`
 	RepoURL     string    `json:"repo_url"`
 	Description string    `json:"description,omitempty"`
@@ -62,6 +65,7 @@ func (dto *ProjectUpdateRequest) ToDomain(alias string) (project domain.Project)
 
 func FromDomain(project domain.Project) (resp ProjectResponse) {
 	return ProjectResponse{
+		ID:          project.ID,
 		Alias:       project.Alias,
 		RepoURL:     project.RepoURL,
 		Description: project.Description,

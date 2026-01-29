@@ -1,0 +1,162 @@
+{{ define "projects" }}
+<ul class="tree-list tree-root">
+  {{ range .Projects }}
+  <li class="tree-item project-item">
+    <span class="tree-toggle" aria-expanded="false"
+      hx-get="{{ $.UIPrefix }}/fragments/projects/{{ .Alias }}/versions"
+      hx-trigger="click"
+      hx-swap="outerHTML"
+      hx-target="closest li.project-item"
+      hx-push-url="true"
+      hx-indicator="#loader"
+      role="button"
+      data-alias="{{ .Alias }}"><span class="tree-icon tree-icon-folder" aria-hidden="true"></span>{{ .Alias }}</span>
+    <ul class="tree-children"></ul>
+  </li>
+  {{ else }}
+  <li class="tree-empty">Нет проектов</li>
+  {{ end }}
+</ul>
+{{ end }}
+
+{{ define "versions" }}
+<li class="tree-item project-item expanded">
+  <span class="tree-toggle" aria-expanded="true"
+    hx-get="{{ $.UIPrefix }}/fragments/projects/{{ .Alias }}/collapse"
+    hx-trigger="click"
+    hx-swap="outerHTML"
+    hx-target="closest li.project-item"
+    hx-push-url="true"
+    hx-indicator="#loader"
+    role="button"
+    data-alias="{{ .Alias }}"><span class="tree-icon tree-icon-folder" aria-hidden="true"></span>{{ .Alias }}</span>
+  <ul class="tree-list tree-children">
+    {{ range .Versions }}
+    <li class="tree-item version-item" id="tree-version-{{ $.Alias }}-{{ . | safeID }}" data-tree-version-alias="{{ $.Alias }}" data-tree-version="{{ . }}">
+      <span class="tree-link"
+        hx-get="{{ $.UIPrefix }}/fragments/projects/{{ $.Alias }}/versions/{{ . }}/packages"
+        hx-trigger="click"
+        hx-swap="innerHTML"
+        hx-target="#content"
+        hx-push-url="true"
+        hx-indicator="#loader"
+        data-alias="{{ $.Alias }}"
+        data-version="{{ . }}"><span class="tree-icon tree-icon-version" aria-hidden="true"></span>{{ . }}</span>
+    </li>
+    {{ else }}
+    <li class="tree-empty">Нет версий</li>
+    {{ end }}
+  </ul>
+</li>
+{{ end }}
+
+{{ define "project-collapsed" }}
+<li class="tree-item project-item">
+  <span class="tree-toggle" aria-expanded="false"
+    hx-get="{{ .UIPrefix }}/fragments/projects/{{ .Alias }}/versions"
+    hx-trigger="click"
+    hx-swap="outerHTML"
+    hx-target="closest li.project-item"
+    hx-push-url="true"
+    hx-indicator="#loader"
+    role="button"
+    data-alias="{{ .Alias }}"><span class="tree-icon tree-icon-folder" aria-hidden="true"></span>{{ .Alias }}</span>
+  <ul class="tree-children"></ul>
+</li>
+{{ end }}
+
+{{ define "packages" }}
+<div class="packages-view">
+  <header class="manifest-header">
+    <div class="manifest-meta">
+      <div class="manifest-meta-row">
+        <span class="manifest-meta-label">Источник</span>
+        <code class="manifest-source-path">{{ if .ManifestSourceURL }}{{ .ManifestSourceURL }}{{ else }}{{ $.UIPrefix }}/{{ .Alias }}/{{ .Version }}{{ end }}</code>
+      </div>
+      <div class="manifest-meta-row">
+        <span class="manifest-meta-label">Версия</span>
+        <span class="manifest-version">{{ .Version }}</span>
+      </div>
+    </div>
+    <div class="manifest-command-block">
+      <code class="manifest-command" data-copy="{{ .ManifestInstallCmd }}">{{ .ManifestInstallCmd }}</code>
+      <button type="button" class="copy-btn" aria-label="Скопировать" title="Скопировать команду" data-copy="{{ .ManifestInstallCmd }}">📋</button>
+    </div>
+  </header>
+  <table class="packages-table">
+    <thead>
+      <tr>
+        <th>Пакет</th>
+        <th>Источник</th>
+        <th>Версия</th>
+        <th>Команда установки</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{ range .Packages }}
+      <tr class="packages-table-row">
+        <td class="packages-table-name">{{ .Name }}</td>
+        <td>{{ if .SourceAlias }}{{ .SourceAlias }}{{ else }}текущий{{ end }}</td>
+        <td>{{ if .SourceVersion }}{{ .SourceVersion }}{{ else }}{{ $.Version }}{{ end }}</td>
+        <td><code class="manifest-command-inline" data-copy="{{ .InstallCommand }}">{{ .InstallCommand }}</code></td>
+        <td class="packages-table-actions">
+          <button type="button" class="pkg-info-btn" aria-label="Информация о пакете" title="Информация"
+            hx-get="{{ $.UIPrefix }}/fragments/package?alias={{ $.Alias }}&version={{ $.Version }}&index={{ .Index }}&modal=1"
+            hx-trigger="click"
+            hx-swap="innerHTML"
+            hx-target="#modal-content"
+            hx-indicator="#loader">ℹ</button>
+          <button type="button" class="copy-btn copy-btn-small" aria-label="Скопировать" title="Скопировать" data-copy="{{ .InstallCommand }}">📋</button>
+        </td>
+      </tr>
+      {{ else }}
+      <tr><td colspan="5" class="packages-empty">Нет пакетов</td></tr>
+      {{ end }}
+    </tbody>
+  </table>
+</div>
+{{ end }}
+
+{{ define "package-card" }}
+<div class="package-card" id="package-card">
+  <h2 class="package-card-title">{{ .Name }}</h2>
+  {{ if .Descr }}<p class="package-card-descr">{{ .Descr }}</p>{{ end }}
+  {{ if .SourceURL }}<p class="package-card-source">Источник: <code>{{ .SourceURL }}</code></p>{{ else if .SourceAlias }}<p class="package-card-source">Источник: {{ .SourceAlias }} {{ .SourceVersion }}</p>{{ end }}
+  <div class="manifest-command-block">
+    <code class="manifest-command" data-copy="{{ .InstallCommand }}">{{ .InstallCommand }}</code>
+    <button type="button" class="copy-btn" aria-label="Скопировать" title="Скопировать команду" data-copy="{{ .InstallCommand }}">📋</button>
+  </div>
+  {{ if .Files }}
+  <section class="package-card-section">
+    <h3>Файлы</h3>
+    <ul class="files-list">
+      {{ range .Files }}
+      <li>{{ .Destination }}{{ if .Checksum }} ({{ .Checksum }}){{ end }}</li>
+      {{ end }}
+    </ul>
+  </section>
+  {{ end }}
+  {{ if .Scripts }}
+  <section class="package-card-section">
+    <h3>Скрипты</h3>
+    <ul class="scripts-list">
+      {{ if .Scripts.PreInstall }}<li>pre_install: {{ .Scripts.PreInstall.Exec }}</li>{{ end }}
+      {{ if .Scripts.PostInstall }}<li>post_install: {{ .Scripts.PostInstall.Exec }}</li>{{ end }}
+      {{ if .Scripts.PreUninstall }}<li>pre_uninstall: {{ .Scripts.PreUninstall.Exec }}</li>{{ end }}
+      {{ if .Scripts.PostUninstall }}<li>post_uninstall: {{ .Scripts.PostUninstall.Exec }}</li>{{ end }}
+    </ul>
+  </section>
+  {{ end }}
+  {{ if .Dependencies }}
+  <section class="package-card-section">
+    <h3>Зависимости</h3>
+    <ul class="deps-list">
+      {{ range .Dependencies }}
+      <li>{{ . }}</li>
+      {{ end }}
+    </ul>
+  </section>
+  {{ end }}
+</div>
+{{ end }}

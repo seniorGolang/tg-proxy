@@ -3,10 +3,12 @@
 package generated
 
 import (
+	"github.com/google/uuid"
 	"gorm.io/cli/gorm/field"
 )
 
 var Project = struct {
+	ID             field.Field[uuid.UUID]
 	Alias          field.String
 	RepoURL        field.String
 	EncryptedToken field.String
@@ -15,6 +17,7 @@ var Project = struct {
 	CreatedAt      field.Time
 	UpdatedAt      field.Time
 }{
+	ID:             field.Field[uuid.UUID]{}.WithColumn("id"),
 	Alias:          field.String{}.WithColumn("alias"),
 	RepoURL:        field.String{}.WithColumn("repo_url"),
 	EncryptedToken: field.String{}.WithColumn("encrypted_token"),

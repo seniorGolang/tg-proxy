@@ -1,0 +1,54 @@
+{{ define "layout" }}
+<!DOCTYPE html>
+<html lang="ru" data-theme="{{ .Theme }}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ block "title" . }}Каталог проектов{{ end }}</title>
+  {{ if .FaviconDataURI }}<link rel="icon" href="data:image/svg+xml;base64,{{ .FaviconDataURI }}" type="image/svg+xml">{{ else }}<link rel="icon" href="{{ .UIPrefix }}/favicon.ico" type="image/svg+xml">{{ end }}
+  <link rel="stylesheet" href="{{ .UIPrefix }}/static/base.css">
+  <link rel="stylesheet" href="{{ .UIPrefix }}/static/theme.css">
+  <link rel="stylesheet" href="{{ .UIPrefix }}/static/loader.css">
+  <script src="https://unpkg.com/htmx.org@2.0.0/dist/htmx.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      htmx.config.useTemplateFragments = true;
+      htmx.config.refreshOnHistoryMiss = false;
+    });
+  </script>
+</head>
+<body data-ui-prefix="{{ .UIPrefix }}" data-initial-path="{{ .InitialPath }}">
+  <div class="app">
+    <header class="header">
+      <h1 class="logo"><img src="{{ .UIPrefix }}/static/logo.svg" alt="" class="logo-icon" width="42" height="42">Каталог проектов</h1>
+      <div class="header-actions">
+        <span id="loader" class="htmx-indicator loader-spinner" aria-hidden="true"></span>
+        <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Переключить тему" title="Тема">
+          <span class="theme-icon-flip">
+            <span class="theme-icon-face theme-icon-sun" aria-hidden="true">☀</span>
+            <span class="theme-icon-face theme-icon-moon" aria-hidden="true">🌙</span>
+          </span>
+        </button>
+      </div>
+    </header>
+    <main class="main">
+      <aside class="sidebar">
+        {{ block "sidebar" . }}{{ end }}
+      </aside>
+      <section class="content" id="content">
+        {{ block "content" . }}{{ end }}
+      </section>
+    </main>
+  </div>
+  <div id="modal" class="drawer" aria-hidden="true">
+    <div class="drawer-overlay"></div>
+    <div class="drawer-panel">
+      <button type="button" class="drawer-close" aria-label="Закрыть">×</button>
+      <div id="modal-content" class="drawer-content"></div>
+    </div>
+  </div>
+  <script src="{{ .UIPrefix }}/static/theme.js"></script>
+  <script src="{{ .UIPrefix }}/static/restore.js"></script>
+</body>
+</html>
+{{ end }}

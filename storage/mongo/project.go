@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
@@ -26,6 +27,19 @@ func (s *Storage) GetProject(ctx context.Context, alias string) (project domain.
 	return toDomain(doc), true, nil
 }
 
+func (s *Storage) GetProjectByID(ctx context.Context, id uuid.UUID) (project domain.Project, found bool, err error) {
+
+	var doc internal.ProjectDocument
+	if err = s.collection.FindOne(ctx, bson.M{"_id": id}).Decode(&doc); err != nil {
+		if err == mongo.ErrNoDocuments {
+			err = nil
+			return
+		}
+		return
+	}
+	return toDomain(doc), true, nil
+}
+
 func (s *Storage) GetProjectByRepoURL(ctx context.Context, repoURL string) (project domain.Project, found bool, err error) {
 
 	var doc internal.ProjectDocument
@@ -39,7 +53,7 @@ func (s *Storage) GetProjectByRepoURL(ctx context.Context, repoURL string) (proj
 	return toDomain(doc), true, nil
 }
 
-func (s *Storage) CreateProject(ctx context.Context, project domain.Project) (err error) {
+func (s *Storage) CreateProject(ctx context.Context, project domain.Project) (id uuid.UUID, err error) {
 
 	project.CreatedAt = time.Now()
 	project.UpdatedAt = time.Now()
@@ -47,16 +61,16 @@ func (s *Storage) CreateProject(ctx context.Context, project domain.Project) (er
 	doc := toDocument(project)
 	if _, err = s.collection.InsertOne(ctx, doc); err != nil {
 		if mongo.IsDuplicateKeyError(err) {
-			return storage.ErrProjectAlreadyExists
+			return uuid.Nil, storage.ErrProjectAlreadyExists
 		}
-		return
+		return uuid.Nil, err
 	}
 
 	if err = s.bumpCatalogVersion(ctx, bumpMinor); err != nil {
-		return
+		return uuid.Nil, err
 	}
 
-	return
+	return project.ID, nil
 }
 
 func (s *Storage) UpdateProject(ctx context.Context, alias string, project domain.Project) (err error) {

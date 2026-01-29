@@ -7,15 +7,18 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
+
 	"github.com/seniorGolang/tg-proxy/errs"
 	"github.com/seniorGolang/tg-proxy/helpers"
+	"github.com/seniorGolang/tg-proxy/model"
 	"github.com/seniorGolang/tg-proxy/model/domain"
 	"github.com/seniorGolang/tg-proxy/model/dto"
 )
 
 func (p *Proxy) handleGetManifest(ctx context.Context, alias string, version string) (manifest []byte, statusCode int, err error) {
 
-	if manifest, err = p.engine.GetManifest(ctx, alias, version, p.baseURL); err != nil {
+	if manifest, err = p.engine.GetManifest(ctx, alias, version, p.manifestSourceBaseURL()); err != nil {
 		if errors.Is(err, errs.ErrProjectNotFound) {
 			statusCode = http.StatusNotFound
 			return
@@ -38,7 +41,7 @@ func (p *Proxy) handleGetManifest(ctx context.Context, alias string, version str
 
 func (p *Proxy) handleGetAggregateManifest(ctx context.Context) (manifest []byte, statusCode int, err error) {
 
-	if manifest, err = p.engine.GetAggregateManifest(ctx, p.baseURL); err != nil {
+	if manifest, err = p.engine.GetAggregateManifest(ctx, p.manifestSourceBaseURL()); err != nil {
 		statusCode = http.StatusInternalServerError
 		return
 	}
@@ -96,36 +99,34 @@ func (p *Proxy) handleGetVersions(ctx context.Context, alias string) (versions [
 	return
 }
 
-func (p *Proxy) handleCreateProject(ctx context.Context, req dto.ProjectCreateRequest) (statusCode int, err error) {
+func (p *Proxy) handleCreateProject(ctx context.Context, req dto.ProjectCreateRequest) (statusCode int, id uuid.UUID, err error) {
 
 	project := req.ToDomain()
 
 	src, err := p.engine.GetSource(project.SourceName)
 	if err != nil {
 		if errors.Is(err, errs.ErrSourceNotFound) {
-			return http.StatusBadRequest, err
+			return http.StatusBadRequest, uuid.Nil, err
 		}
-		return http.StatusInternalServerError, err
+		return http.StatusInternalServerError, uuid.Nil, err
 	}
 	_, sourceURL := src.Info()
 	if err = helpers.ValidateRepoURLMatchesSource(project.RepoURL, sourceURL); err != nil {
 		if errors.Is(err, errs.ErrRepoURLSourceMismatch) {
-			return http.StatusBadRequest, err
+			return http.StatusBadRequest, uuid.Nil, err
 		}
-		return http.StatusInternalServerError, err
+		return http.StatusInternalServerError, uuid.Nil, err
 	}
 
-	if err = p.engine.CreateProject(ctx, project); err != nil {
+	id, err = p.engine.CreateProject(ctx, project)
+	if err != nil {
 		if errors.Is(err, errs.ErrProjectAlreadyExists) {
-			statusCode = http.StatusConflict
-			return
+			return http.StatusConflict, uuid.Nil, err
 		}
-		statusCode = http.StatusInternalServerError
-		return
+		return http.StatusInternalServerError, uuid.Nil, err
 	}
 
-	statusCode = http.StatusCreated
-	return
+	return http.StatusCreated, id, nil
 }
 
 func (p *Proxy) handleGetProject(ctx context.Context, alias string) (project dto.ProjectResponse, found bool, statusCode int, err error) {
@@ -254,5 +255,86 @@ func (p *Proxy) handleListProjects(ctx context.Context, limit int, offset int) (
 	}
 
 	statusCode = http.StatusOK
+	return
+}
+
+func (p *Proxy) handleGetManifestData(ctx context.Context, alias string, version string) (manifest *model.Manifest, statusCode int, err error) {
+
+	if manifest, err = p.engine.GetManifestData(ctx, alias, version, p.manifestSourceBaseURL()); err != nil {
+		if errors.Is(err, errs.ErrProjectNotFound) {
+			statusCode = http.StatusNotFound
+			return
+		}
+		if errors.Is(err, errs.ErrVersionNotFound) {
+			statusCode = http.StatusNotFound
+			return
+		}
+		statusCode = http.StatusInternalServerError
+		return
+	}
+	statusCode = http.StatusOK
+	return
+}
+
+func (p *Proxy) handleGetManifestAggregated(ctx context.Context, alias string, version string) (out *model.ManifestAggregatedResponse, statusCode int, err error) {
+
+	if out, err = p.engine.GetManifestAggregated(ctx, alias, version, p.manifestSourceBaseURL()); err != nil {
+		if errors.Is(err, errs.ErrProjectNotFound) {
+			statusCode = http.StatusNotFound
+			return
+		}
+		if errors.Is(err, errs.ErrVersionNotFound) {
+			statusCode = http.StatusNotFound
+			return
+		}
+		statusCode = http.StatusInternalServerError
+		return
+	}
+	statusCode = http.StatusOK
+	return
+}
+
+// ListProjects — для UI и кеша (без HTTP-статуса).
+func (p *Proxy) ListProjects(ctx context.Context, limit int, offset int) (projects []dto.ProjectResponse, total int64, err error) {
+
+	var statusCode int
+	projects, total, statusCode, err = p.handleListProjects(ctx, limit, offset)
+	if err != nil {
+		return
+	}
+	if statusCode != http.StatusOK {
+		err = errors.New(helpers.GetErrorMessage(err))
+		return
+	}
+	return
+}
+
+// GetVersions — для UI и кеша (без HTTP-статуса).
+func (p *Proxy) GetVersions(ctx context.Context, alias string) (versions []string, err error) {
+
+	var statusCode int
+	versions, statusCode, err = p.handleGetVersions(ctx, alias)
+	if err != nil {
+		return
+	}
+	if statusCode != http.StatusOK {
+		err = errors.New(helpers.GetErrorMessage(err))
+		return
+	}
+	return
+}
+
+// GetManifestAggregated — для UI и кеша (без HTTP-статуса).
+func (p *Proxy) GetManifestAggregated(ctx context.Context, alias string, version string) (out *model.ManifestAggregatedResponse, err error) {
+
+	var statusCode int
+	out, statusCode, err = p.handleGetManifestAggregated(ctx, alias, version)
+	if err != nil {
+		return
+	}
+	if statusCode != http.StatusOK {
+		err = errors.New(helpers.GetErrorMessage(err))
+		return
+	}
 	return
 }

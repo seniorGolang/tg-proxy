@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 
 	"github.com/seniorGolang/tg-proxy/errs"
@@ -17,6 +18,7 @@ import (
 	"github.com/seniorGolang/tg-proxy/model/domain"
 )
 
+const maxAggregateDepth = 10
 const listProjectsBatchSize = 500
 const aggregateManifestTTL = 5 * time.Minute
 
@@ -108,6 +110,21 @@ func (e *engine) GetSource(name string) (src Source, err error) {
 
 func (e *engine) GetManifest(ctx context.Context, alias string, version string, baseURL string) (manifest []byte, err error) {
 
+	var m *model.Manifest
+	if m, err = e.getManifestData(ctx, alias, version, baseURL); err != nil {
+		return
+	}
+	manifest, err = yaml.Marshal(m)
+	return
+}
+
+func (e *engine) GetManifestData(ctx context.Context, alias string, version string, baseURL string) (m *model.Manifest, err error) {
+
+	return e.getManifestData(ctx, alias, version, baseURL)
+}
+
+func (e *engine) getManifestData(ctx context.Context, alias string, version string, baseURL string) (m *model.Manifest, err error) {
+
 	var found bool
 	var project domain.Project
 	if project, found, err = e.resolver.ResolveProject(ctx, alias); err != nil {
@@ -180,7 +197,6 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 
 	var domainManifest domain.Manifest
 	if domainManifest, err = src.GetManifest(ctx, project, version); err != nil {
-		// 404 от API → ErrVersionNotFound (версия уже проверена в списке версий)
 		if statusCode, found := helpers.ExtractStatusCode(err); found && statusCode == 404 {
 			slog.Debug("Manifest not found (404), treating as version not found",
 				slog.String(helpers.LogKeyAction, helpers.ActionGetManifest),
@@ -216,7 +232,7 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 		sourceDomain = ""
 	}
 
-	if manifest, err = e.transformer.Transform(ctx, &modelManifest, alias, version, baseURL, sourceDomain, src); err != nil {
+	if err = e.transformer.ReplaceManifestURLs(ctx, &modelManifest, alias, version, baseURL, sourceDomain, src); err != nil {
 		slog.Debug("Failed to transform manifest",
 			slog.String(helpers.LogKeyAction, helpers.ActionGetManifest),
 			slog.String(helpers.LogKeyAlias, alias),
@@ -226,6 +242,68 @@ func (e *engine) GetManifest(ctx context.Context, alias string, version string, 
 		return
 	}
 
+	m = &modelManifest
+	return
+}
+
+func (e *engine) GetManifestAggregated(ctx context.Context, alias string, version string, baseURL string) (out *model.ManifestAggregatedResponse, err error) {
+
+	visited := make(map[string]bool)
+	var packages []model.PackageWithSource
+	var versionOut string
+	versionOut, packages, err = e.collectAggregatedPackages(ctx, alias, version, baseURL, visited, 0, maxAggregateDepth)
+	if err != nil {
+		return
+	}
+	out = &model.ManifestAggregatedResponse{
+		Version:  versionOut,
+		Packages: packages,
+	}
+	return
+}
+
+func (e *engine) collectAggregatedPackages(ctx context.Context, alias string, version string, baseURL string, visited map[string]bool, depth int, maxDepth int) (versionOut string, packages []model.PackageWithSource, err error) {
+
+	if depth > maxDepth {
+		return version, nil, nil
+	}
+	key := alias + "/" + version
+	if visited[key] {
+		return version, nil, nil
+	}
+	visited[key] = true
+	defer delete(visited, key)
+
+	var m *model.Manifest
+	if m, err = e.getManifestData(ctx, alias, version, baseURL); err != nil {
+		slog.Debug("Failed to get manifest for aggregation",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetManifestAggregated),
+			slog.String(helpers.LogKeyAlias, alias),
+			slog.String(helpers.LogKeyVersion, version),
+			slog.Int("depth", depth),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		return
+	}
+	versionOut = m.Version
+	for i := range m.Packages {
+		packages = append(packages, model.PackageWithSource{
+			Package:       m.Packages[i],
+			SourceAlias:   alias,
+			SourceVersion: version,
+		})
+	}
+	for _, ref := range m.Manifests {
+		refAlias, refVersion, ok := helpers.ParseManifestRefURL(baseURL, ref.URL)
+		if !ok {
+			continue
+		}
+		var subPackages []model.PackageWithSource
+		if _, subPackages, err = e.collectAggregatedPackages(ctx, refAlias, refVersion, baseURL, visited, depth+1, maxDepth); err != nil {
+			return
+		}
+		packages = append(packages, subPackages...)
+	}
 	return
 }
 
@@ -486,8 +564,11 @@ func (e *engine) GetVersions(ctx context.Context, alias string) (versions []stri
 	return
 }
 
-func (e *engine) CreateProject(ctx context.Context, project domain.Project) (err error) {
+func (e *engine) CreateProject(ctx context.Context, project domain.Project) (id uuid.UUID, err error) {
 
+	if project.ID == uuid.Nil {
+		project.ID = uuid.New()
+	}
 	project.RepoURL = helpers.NormalizeRepoURL(project.RepoURL)
 
 	if project.Token != "" && e.encryptor != nil {
@@ -498,29 +579,62 @@ func (e *engine) CreateProject(ctx context.Context, project domain.Project) (err
 				slog.String(helpers.LogKeyAlias, project.Alias),
 				slog.Any(helpers.LogKeyError, err),
 			)
-			return
+			return uuid.Nil, err
 		}
 		project.EncryptedToken = encryptedToken
 		project.Token = ""
 	}
 
-	if err = e.storage.CreateProject(ctx, project); err != nil {
+	if id, err = e.storage.CreateProject(ctx, project); err != nil {
 		slog.Debug("Failed to create project in storage",
 			slog.String(helpers.LogKeyAction, helpers.ActionCreateProject),
 			slog.String(helpers.LogKeyAlias, project.Alias),
 			slog.Any(helpers.LogKeyError, err),
 		)
-		return
+		return uuid.Nil, err
 	}
 
 	_ = e.resolver.InvalidateCache(ctx, project.Alias)
 
-	return
+	return id, nil
 }
 
 func (e *engine) GetProject(ctx context.Context, alias string) (project domain.Project, found bool, err error) {
 
 	return e.resolver.ResolveProject(ctx, alias)
+}
+
+func (e *engine) GetProjectByID(ctx context.Context, id uuid.UUID) (project domain.Project, found bool, err error) {
+
+	if e.storage == nil {
+		return
+	}
+
+	if project, found, err = e.storage.GetProjectByID(ctx, id); err != nil || !found {
+		return
+	}
+
+	if project.EncryptedToken != "" && e.encryptor != nil {
+		var token string
+		if token, err = e.encryptor.DecryptString(project.EncryptedToken); err != nil {
+			slog.Debug("Failed to decrypt token",
+				slog.String(helpers.LogKeyAction, helpers.ActionResolveProject),
+				slog.String(helpers.LogKeyAlias, project.Alias),
+				slog.Any(helpers.LogKeyError, err),
+			)
+			project = domain.Project{}
+			err = fmt.Errorf("failed to decrypt token: %w", err)
+			return
+		}
+		project.Token = token
+		project.EncryptedToken = ""
+	}
+
+	if e.cache != nil {
+		_ = e.cache.SetProject(ctx, project.Alias, project, projectTTL)
+	}
+
+	return
 }
 
 func (e *engine) UpdateProject(ctx context.Context, alias string, project domain.Project) (err error) {

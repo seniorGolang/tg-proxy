@@ -22,6 +22,7 @@ func (p *Proxy) SetPublicRoutes(mux *http.ServeMux, prefix string) {
 	if base == "" {
 		base = "/"
 	}
+	p.publicPrefix = base
 	h := p.publicAuthMiddleware
 
 	mux.HandleFunc("GET "+base, h(func(w http.ResponseWriter, r *http.Request) {
@@ -69,6 +70,12 @@ func (p *Proxy) SetAdminRoutes(mux *http.ServeMux, prefix string) {
 	}))
 	mux.HandleFunc("DELETE "+path.Join(base, "projects/{alias}"), h(func(w http.ResponseWriter, r *http.Request) {
 		p.handleDeleteProjectNetHTTP(w, r, r.PathValue("alias"))
+	}))
+	mux.HandleFunc("GET "+path.Join(base, "projects/{alias}/versions"), h(func(w http.ResponseWriter, r *http.Request) {
+		p.handleGetProjectVersionsAdminNetHTTP(w, r, r.PathValue("alias"))
+	}))
+	mux.HandleFunc("GET "+path.Join(base, "projects/{alias}/versions/{version}/manifest"), h(func(w http.ResponseWriter, r *http.Request) {
+		p.handleGetManifestAdminNetHTTP(w, r, r.PathValue("alias"), r.PathValue("version"))
 	}))
 }
 
@@ -427,7 +434,7 @@ func (p *Proxy) handleCreateProjectNetHTTP(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	statusCode, err := p.handleCreateProject(r.Context(), req)
+	statusCode, id, err := p.handleCreateProject(r.Context(), req)
 	if err != nil {
 		slog.Error("Failed to create project",
 			slog.String(helpers.LogKeyAction, helpers.ActionCreateProject),
@@ -458,7 +465,9 @@ func (p *Proxy) handleCreateProjectNetHTTP(w http.ResponseWriter, r *http.Reques
 	}
 	slog.Info("Create project request completed", args...)
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": id.String()})
 }
 
 func (p *Proxy) handleGetProjectNetHTTP(w http.ResponseWriter, r *http.Request, alias string) {
@@ -645,6 +654,91 @@ func (p *Proxy) handleDeleteProjectNetHTTP(w http.ResponseWriter, r *http.Reques
 	)
 
 	w.WriteHeader(statusCode)
+}
+
+func (p *Proxy) handleGetProjectVersionsAdminNetHTTP(w http.ResponseWriter, r *http.Request, alias string) {
+
+	p.handleGetVersionsNetHTTP(w, r, alias)
+}
+
+func (p *Proxy) handleGetManifestAdminNetHTTP(w http.ResponseWriter, r *http.Request, alias string, version string) {
+
+	if r.URL.Query().Get("aggregate") == "true" {
+		p.handleGetManifestAggregatedNetHTTP(w, r, alias, version)
+		return
+	}
+	p.handleGetManifestDataNetHTTP(w, r, alias, version)
+}
+
+func (p *Proxy) handleGetManifestDataNetHTTP(w http.ResponseWriter, r *http.Request, alias string, version string) {
+
+	startTime := time.Now()
+
+	manifest, statusCode, err := p.handleGetManifestData(r.Context(), alias, version)
+	if err != nil {
+		slog.Error("Failed to get manifest data",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetManifestData),
+			slog.String(helpers.LogKeyAlias, alias),
+			slog.String(helpers.LogKeyVersion, version),
+			slog.Int(helpers.LogKeyStatusCode, statusCode),
+			slog.String(helpers.LogKeyMethod, r.Method),
+			slog.String(helpers.LogKeyPath, r.URL.Path),
+			slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		http.Error(w, helpers.GetErrorMessage(err), statusCode)
+		return
+	}
+
+	slog.Info("Manifest data request completed",
+		slog.String(helpers.LogKeyAction, helpers.ActionGetManifestData),
+		slog.String(helpers.LogKeyAlias, alias),
+		slog.String(helpers.LogKeyVersion, version),
+		slog.Int(helpers.LogKeyStatusCode, statusCode),
+		slog.String(helpers.LogKeyMethod, r.Method),
+		slog.String(helpers.LogKeyPath, r.URL.Path),
+		slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(manifest)
+}
+
+func (p *Proxy) handleGetManifestAggregatedNetHTTP(w http.ResponseWriter, r *http.Request, alias string, version string) {
+
+	startTime := time.Now()
+
+	out, statusCode, err := p.handleGetManifestAggregated(r.Context(), alias, version)
+	if err != nil {
+		slog.Error("Failed to get manifest aggregated",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetManifestAggregated),
+			slog.String(helpers.LogKeyAlias, alias),
+			slog.String(helpers.LogKeyVersion, version),
+			slog.Int(helpers.LogKeyStatusCode, statusCode),
+			slog.String(helpers.LogKeyMethod, r.Method),
+			slog.String(helpers.LogKeyPath, r.URL.Path),
+			slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		http.Error(w, helpers.GetErrorMessage(err), statusCode)
+		return
+	}
+
+	slog.Info("Manifest aggregated request completed",
+		slog.String(helpers.LogKeyAction, helpers.ActionGetManifestAggregated),
+		slog.String(helpers.LogKeyAlias, alias),
+		slog.String(helpers.LogKeyVersion, version),
+		slog.Int(helpers.LogKeyStatusCode, statusCode),
+		slog.String(helpers.LogKeyMethod, r.Method),
+		slog.String(helpers.LogKeyPath, r.URL.Path),
+		slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+		slog.Int("packages_count", len(out.Packages)),
+	)
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(statusCode)
+	_ = json.NewEncoder(w).Encode(out)
 }
 
 func (p *Proxy) copyResponseHeadersNetHTTP(w http.ResponseWriter, resp *http.Response) {

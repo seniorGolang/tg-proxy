@@ -47,7 +47,7 @@ func NewRepository(uri string, opts ...Option) (stor *Storage, err error) {
 		return
 	}
 
-	clientOpts := options.Client().ApplyURI(uri)
+	clientOpts := options.Client().ApplyURI(uri).SetRegistry(newBSONRegistryWithUUID())
 	var client *mongo.Client
 	client, err = mongo.Connect(clientOpts)
 	if err != nil {

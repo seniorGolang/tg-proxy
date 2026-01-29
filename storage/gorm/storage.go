@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
@@ -123,6 +124,22 @@ func (s *Storage) GetProject(ctx context.Context, alias string) (project domain.
 	return
 }
 
+func (s *Storage) GetProjectByID(ctx context.Context, id uuid.UUID) (project domain.Project, found bool, err error) {
+
+	var p Project
+	if err = s.db.WithContext(ctx).Table(s.projectsTable).Where(generated.Project.ID.Eq(id)).First(&p).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			err = nil
+			return
+		}
+		return
+	}
+
+	project = p.ToDomain()
+	found = true
+	return
+}
+
 func (s *Storage) GetProjectByRepoURL(ctx context.Context, repoURL string) (project domain.Project, found bool, err error) {
 
 	var p Project
@@ -187,9 +204,9 @@ func (s *Storage) bumpCatalogVersion(ctx context.Context, tx *gorm.DB, kind cata
 	return
 }
 
-func (s *Storage) CreateProject(ctx context.Context, project domain.Project) (err error) {
+func (s *Storage) CreateProject(ctx context.Context, project domain.Project) (id uuid.UUID, err error) {
 
-	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) (txErr error) {
+	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) (txErr error) {
 		project.CreatedAt = time.Now()
 		project.UpdatedAt = time.Now()
 
@@ -201,8 +218,10 @@ func (s *Storage) CreateProject(ctx context.Context, project domain.Project) (er
 			return
 		}
 
+		id = p.ID
 		return s.bumpCatalogVersion(ctx, tx, catalogBumpMinor)
 	})
+	return
 }
 
 func (s *Storage) UpdateProject(ctx context.Context, alias string, project domain.Project) (err error) {

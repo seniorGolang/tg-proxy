@@ -18,6 +18,11 @@ import (
 
 func (p *Proxy) SetPublicRoutesFiber(app *fiber.App, prefix string) {
 
+	base := strings.TrimSuffix(prefix, "/")
+	if base == "" {
+		base = "/"
+	}
+	p.publicPrefix = base
 	group := app.Group(prefix, p.publicFiberAuthMiddleware)
 	group.Get("/", p.handleGetAggregateManifestFiber)
 	group.Get("/manifest.yml", p.handleGetAggregateManifestFiber)
@@ -36,6 +41,8 @@ func (p *Proxy) SetAdminRoutesFiber(app *fiber.App, prefix string) {
 	group.Get("/projects/:alias", p.handleGetProjectFiber)
 	group.Put("/projects/:alias", p.handleUpdateProjectFiber)
 	group.Delete("/projects/:alias", p.handleDeleteProjectFiber)
+	group.Get("/projects/:alias/versions/:version/manifest", p.handleGetManifestAdminFiber)
+	group.Get("/projects/:alias/versions", p.handleGetProjectVersionsAdminFiber)
 }
 
 func (p *Proxy) handleGetManifestFiber(c *fiber.Ctx) (err error) {
@@ -396,7 +403,7 @@ func (p *Proxy) handleCreateProjectFiber(c *fiber.Ctx) (err error) {
 		})
 	}
 
-	statusCode, err := p.handleCreateProject(c.Context(), req)
+	statusCode, id, err := p.handleCreateProject(c.Context(), req)
 	if err != nil {
 		slog.Error("Failed to create project",
 			slog.String(helpers.LogKeyAction, helpers.ActionCreateProject),
@@ -428,7 +435,7 @@ func (p *Proxy) handleCreateProjectFiber(c *fiber.Ctx) (err error) {
 	}
 	slog.Info("Create project request completed", args...)
 
-	return c.SendStatus(statusCode)
+	return c.Status(statusCode).JSON(fiber.Map{"id": id.String()})
 }
 
 func (p *Proxy) handleGetProjectFiber(c *fiber.Ctx) (err error) {
@@ -625,6 +632,90 @@ func (p *Proxy) handleDeleteProjectFiber(c *fiber.Ctx) (err error) {
 	)
 
 	return c.SendStatus(statusCode)
+}
+
+func (p *Proxy) handleGetProjectVersionsAdminFiber(c *fiber.Ctx) (err error) {
+
+	return p.handleGetVersionsFiber(c)
+}
+
+func (p *Proxy) handleGetManifestAdminFiber(c *fiber.Ctx) (err error) {
+
+	alias := c.Params("alias")
+	version := c.Params("version")
+	if c.Query("aggregate") == "true" {
+		return p.handleGetManifestAggregatedFiber(c, alias, version)
+	}
+	return p.handleGetManifestDataFiber(c, alias, version)
+}
+
+func (p *Proxy) handleGetManifestDataFiber(c *fiber.Ctx, alias string, version string) (err error) {
+
+	startTime := time.Now()
+
+	manifest, statusCode, err := p.handleGetManifestData(c.Context(), alias, version)
+	if err != nil {
+		slog.Error("Failed to get manifest data",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetManifestData),
+			slog.String(helpers.LogKeyAlias, alias),
+			slog.String(helpers.LogKeyVersion, version),
+			slog.Int(helpers.LogKeyStatusCode, statusCode),
+			slog.String(helpers.LogKeyMethod, c.Method()),
+			slog.String(helpers.LogKeyPath, c.Path()),
+			slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error": helpers.GetErrorMessage(err),
+		})
+	}
+
+	slog.Info("Manifest data request completed",
+		slog.String(helpers.LogKeyAction, helpers.ActionGetManifestData),
+		slog.String(helpers.LogKeyAlias, alias),
+		slog.String(helpers.LogKeyVersion, version),
+		slog.Int(helpers.LogKeyStatusCode, statusCode),
+		slog.String(helpers.LogKeyMethod, c.Method()),
+		slog.String(helpers.LogKeyPath, c.Path()),
+		slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+	)
+
+	return c.Status(statusCode).JSON(manifest)
+}
+
+func (p *Proxy) handleGetManifestAggregatedFiber(c *fiber.Ctx, alias string, version string) (err error) {
+
+	startTime := time.Now()
+
+	out, statusCode, err := p.handleGetManifestAggregated(c.Context(), alias, version)
+	if err != nil {
+		slog.Error("Failed to get manifest aggregated",
+			slog.String(helpers.LogKeyAction, helpers.ActionGetManifestAggregated),
+			slog.String(helpers.LogKeyAlias, alias),
+			slog.String(helpers.LogKeyVersion, version),
+			slog.Int(helpers.LogKeyStatusCode, statusCode),
+			slog.String(helpers.LogKeyMethod, c.Method()),
+			slog.String(helpers.LogKeyPath, c.Path()),
+			slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+			slog.Any(helpers.LogKeyError, err),
+		)
+		return c.Status(statusCode).JSON(fiber.Map{
+			"error": helpers.GetErrorMessage(err),
+		})
+	}
+
+	slog.Info("Manifest aggregated request completed",
+		slog.String(helpers.LogKeyAction, helpers.ActionGetManifestAggregated),
+		slog.String(helpers.LogKeyAlias, alias),
+		slog.String(helpers.LogKeyVersion, version),
+		slog.Int(helpers.LogKeyStatusCode, statusCode),
+		slog.String(helpers.LogKeyMethod, c.Method()),
+		slog.String(helpers.LogKeyPath, c.Path()),
+		slog.Duration(helpers.LogKeyDuration, time.Since(startTime)),
+		slog.Int("packages_count", len(out.Packages)),
+	)
+
+	return c.Status(statusCode).JSON(out)
 }
 
 func (p *Proxy) copyResponseHeaders(c *fiber.Ctx, resp *http.Response) {

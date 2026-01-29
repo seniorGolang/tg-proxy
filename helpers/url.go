@@ -79,8 +79,7 @@ func NormalizeRepoURL(repoURL string) (normalized string) {
 	return
 }
 
-// ValidateRepoURLMatchesSource проверяет, что repoURL имеет ту же схему и хост, что и sourceBaseURL.
-// Возвращает errs.ErrRepoURLSourceMismatch при несовпадении или ошибке разбора URL.
+// ValidateRepoURLMatchesSource проверяет схему и хост repoURL и sourceBaseURL. Возвращает errs.ErrRepoURLSourceMismatch при несовпадении.
 func ValidateRepoURLMatchesSource(repoURL string, sourceBaseURL string) (err error) {
 
 	repoParsed, err := url.Parse(repoURL)
@@ -102,4 +101,42 @@ func ValidateRepoURLMatchesSource(repoURL string, sourceBaseURL string) (err err
 	}
 
 	return nil
+}
+
+// ParseManifestRefURL извлекает alias и version из URL манифеста прокси (baseURL/alias/version/...). ok=false, если refURL не наш.
+func ParseManifestRefURL(baseURL string, refURL string) (alias string, version string, ok bool) {
+
+	if baseURL == "" || refURL == "" {
+		return "", "", false
+	}
+
+	baseParsed, err := url.Parse(baseURL)
+	if err != nil {
+		return "", "", false
+	}
+	refParsed, err := url.Parse(refURL)
+	if err != nil {
+		return "", "", false
+	}
+
+	if baseParsed.Scheme != refParsed.Scheme || baseParsed.Host != refParsed.Host {
+		return "", "", false
+	}
+
+	basePath := strings.TrimSuffix(path.Clean(baseParsed.Path), "/")
+	refPath := path.Clean(refParsed.Path)
+	if basePath != "" && !strings.HasPrefix(refPath, basePath+"/") {
+		return "", "", false
+	}
+	suffix := refPath
+	if basePath != "" {
+		suffix = strings.TrimPrefix(refPath, basePath+"/")
+	}
+	parts := strings.Split(suffix, "/")
+	if len(parts) < 3 {
+		return "", "", false
+	}
+	alias = parts[0]
+	version = parts[1]
+	return alias, version, true
 }

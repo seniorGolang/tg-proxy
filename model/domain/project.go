@@ -1,8 +1,13 @@
 package domain
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 type Project struct {
+	ID             uuid.UUID
 	Alias          string
 	RepoURL        string
 	EncryptedToken string

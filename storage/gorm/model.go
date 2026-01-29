@@ -3,6 +3,7 @@ package gorm
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"github.com/seniorGolang/tg-proxy/model/domain"
@@ -10,7 +11,8 @@ import (
 )
 
 type Project struct {
-	Alias          string    `gorm:"primaryKey;column:alias"`
+	ID             uuid.UUID `gorm:"type:uuid;primaryKey;column:id"`
+	Alias          string    `gorm:"column:alias;not null;uniqueIndex:idx_projects_alias"`
 	RepoURL        string    `gorm:"column:repo_url;not null;index:idx_projects_repo_url"`
 	EncryptedToken string    `gorm:"column:encrypted_token"`
 	Description    string    `gorm:"column:description"`
@@ -25,6 +27,7 @@ func (Project) TableName() string {
 
 func (p Project) ToDomain() (project domain.Project) {
 	return domain.Project{
+		ID:             p.ID,
 		Alias:          p.Alias,
 		RepoURL:        p.RepoURL,
 		EncryptedToken: p.EncryptedToken,
@@ -37,6 +40,7 @@ func (p Project) ToDomain() (project domain.Project) {
 
 func FromDomain(project domain.Project) (p Project) {
 	return Project{
+		ID:             project.ID,
 		Alias:          project.Alias,
 		RepoURL:        project.RepoURL,
 		EncryptedToken: project.EncryptedToken,
@@ -48,6 +52,9 @@ func FromDomain(project domain.Project) (p Project) {
 }
 
 func (p *Project) BeforeCreate(tx *gorm.DB) (err error) {
+	if p.ID == uuid.Nil {
+		p.ID = uuid.New()
+	}
 	now := time.Now()
 	if p.CreatedAt.IsZero() {
 		p.CreatedAt = now
@@ -66,6 +73,7 @@ func (p *Project) BeforeUpdate(tx *gorm.DB) (err error) {
 func GetOmitFields() (fields []string) {
 
 	fields = []string{
+		generated.Project.ID.Column().Name,
 		generated.Project.Alias.Column().Name,
 		generated.Project.CreatedAt.Column().Name,
 	}

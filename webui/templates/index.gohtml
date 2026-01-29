@@ -1,0 +1,19 @@
+{{ define "title" }}Каталог проектов{{ end }}
+
+{{ define "sidebar" }}
+<div class="tree" id="tree">
+  <div class="tree-loading" id="tree-projects"
+    hx-get="{{ .UIPrefix }}/fragments/projects"
+    hx-trigger="load"
+    hx-swap="innerHTML">
+    Загрузка…
+  </div>
+</div>
+{{ end }}
+
+
+{{ define "content" }}
+<div class="welcome" id="welcome">
+  <p>Выберите проект в дереве слева, затем версию и пакет.</p>
+</div>
+{{ end }}
