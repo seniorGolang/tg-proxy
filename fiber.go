@@ -29,8 +29,8 @@ func (p *Proxy) SetPublicRoutesFiber(app *fiber.App, prefix string) {
 	group.Get("/versions", p.handleGetCatalogVersionFiber)
 	group.Get("/:version/manifest.yml", p.handleGetAggregateManifestAtVersionFiber)
 	group.Get("/:alias/:version/manifest.yml", p.handleGetManifestFiber)
-	group.Get("/:alias/:version/*", p.handleGetFileFiber)
 	group.Get("/:alias/versions", p.handleGetVersionsFiber)
+	group.Get("/:alias/:version/*", p.handleGetFileFiber)
 }
 
 func (p *Proxy) SetAdminRoutesFiber(app *fiber.App, prefix string) {
