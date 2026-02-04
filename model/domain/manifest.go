@@ -13,6 +13,8 @@ type ManifestRef struct {
 type Package struct {
 	Name         string
 	Descr        string
+	Hidden       bool
+	Alias        string
 	Downloads    []PlatformDownload
 	Files        []FileInstallation
 	Scripts      *Scripts

@@ -34,6 +34,8 @@ func (m *Manifest) FromDomain(manifest domain.Manifest) {
 func (p *Package) ToDomain() (pkg domain.Package) {
 	pkg.Name = p.Name
 	pkg.Descr = p.Descr
+	pkg.Hidden = p.Hidden
+	pkg.Alias = p.Alias
 	pkg.Downloads = make([]domain.PlatformDownload, len(p.Downloads))
 	for i := range p.Downloads {
 		pkg.Downloads[i] = domain.PlatformDownload{
@@ -62,6 +64,8 @@ func (p *Package) ToDomain() (pkg domain.Package) {
 func (p *Package) FromDomain(pkg domain.Package) {
 	p.Name = pkg.Name
 	p.Descr = pkg.Descr
+	p.Hidden = pkg.Hidden
+	p.Alias = pkg.Alias
 	p.Downloads = make([]PlatformDownload, len(pkg.Downloads))
 	for i := range pkg.Downloads {
 		p.Downloads[i] = PlatformDownload{

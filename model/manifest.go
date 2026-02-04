@@ -13,6 +13,8 @@ type ManifestRef struct {
 type Package struct {
 	Name         string             `yaml:"name" json:"name"`
 	Descr        string             `yaml:"descr,omitempty" json:"descr,omitempty"`
+	Hidden       bool               `yaml:"hidden,omitempty" json:"hidden,omitempty"`
+	Alias        string             `yaml:"alias,omitempty" json:"alias,omitempty"`
 	Downloads    []PlatformDownload `yaml:"downloads" json:"downloads"`
 	Files        []FileInstallation `yaml:"files" json:"files"`
 	Scripts      *Scripts           `yaml:"scripts,omitempty" json:"scripts,omitempty"`
@@ -43,6 +45,13 @@ type ScriptAction struct {
 	Script string `yaml:"script,omitempty" json:"script,omitempty"`
 	Source string `yaml:"source,omitempty" json:"source,omitempty"`
 	Exec   string `yaml:"exec" json:"exec"`
+}
+
+// Dependency — зависимость пакета (источник, пакет, версия).
+type Dependency struct {
+	Source  string `yaml:"source,omitempty" json:"source,omitempty"`
+	Package string `yaml:"package,omitempty" json:"package,omitempty"`
+	Version string `yaml:"version,omitempty" json:"version,omitempty"`
 }
 
 // PackageWithSource — пакет с указанием источника (агрегированный манифест).

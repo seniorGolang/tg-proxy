@@ -933,6 +933,8 @@
         "properties": {
           "name": { "type": "string" },
           "descr": { "type": "string" },
+          "hidden": { "type": "boolean", "description": "Скрытый пакет" },
+          "alias": { "type": "string", "description": "Алиас пакета" },
           "downloads": {
             "type": "array",
             "items": { "$ref": "#/components/schemas/PlatformDownload" }
